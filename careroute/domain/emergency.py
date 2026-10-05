@@ -18,12 +18,13 @@ product would verify numbers against an authoritative per-country source.
 from __future__ import annotations
 
 import asyncio
-import re
 import time
 
 from careroute.maps.cache import LRUCache
 from careroute.maps.geocoding import NominatimGeocoder
 from careroute.providers.osm.directory import OsmProviderDirectory
+from careroute.providers.osm.matching import NOT_AN_ER, is_er_candidate
+from careroute.providers.osm.sources import Want
 
 
 class EmergencyNumberResolver:
@@ -75,11 +76,9 @@ class EmergencyNumberResolver:
 
 
 class EmergencyService:
-    # OSM tags many single-doctor or single-specialty practices as hospitals
-    # ("Dr Ramesh Dalwai Spine Surgeon" was offered as an ER for chest pain).
-    NOT_AN_ER = re.compile(
-        r"^dr\.?\s|\bspine\b|\beye\b|ophthalm|dental|dentist|\bskin\b|\bhair\b|"
-        r"cosmetic|\bivf\b|fertility|physiotherap|ayurved|homo?eopath|\bdiagnostic", re.I)
+    # What counts as an ER lives in providers/osm/matching.py (is_er_candidate),
+    # so the PostGIS import can precompute it per row.
+    NOT_AN_ER = NOT_AN_ER
     SEARCH_RADIUS_M = 8000
 
     def __init__(self, numbers: EmergencyNumberResolver, directory: OsmProviderDirectory | None):
@@ -89,15 +88,14 @@ class EmergencyService:
     @classmethod
     def er_candidates(cls, facilities: list[dict]) -> list[dict]:
         return [f for f in OsmProviderDirectory.dedupe(facilities)
-                if "hospital" in (f.get("facility") or "")
-                and f.get("_er") != "no"
-                and not cls.NOT_AN_ER.search(f["name"])]
+                if is_er_candidate(f["name"], f.get("facility") or "", f.get("_er"))]
 
     async def nearest_hospitals(self, lat: float, lng: float, k: int = 3) -> list[dict]:
         if self.directory is None:
             return []
         try:
-            facilities, err = await self.directory.fetch_nearby(lat, lng, self.SEARCH_RADIUS_M)
+            facilities, err = await self.directory.fetch_nearby(
+                lat, lng, self.SEARCH_RADIUS_M, want=Want("er", k))
             if err or not facilities:
                 return []
             hosp = self.er_candidates(facilities)[:k]

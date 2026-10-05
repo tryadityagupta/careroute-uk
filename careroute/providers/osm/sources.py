@@ -8,9 +8,17 @@ Two interchangeable sources behind one interface (OSM_SOURCE picks one):
     PostgisSource   self-hosted import (infra/geo/import.sh). The scaled design.
 
 Both return the same element shape ({lat, lon, tags} or {center: {...}}), so
-OsmProviderDirectory is source-agnostic. Both report an unreachable
-directory with the SAME typed error payload, because "the lookup failed" and
-"nothing was found" are different facts and the model once conflated them.
+OsmProviderDirectory is source-agnostic.
+
+PUSHDOWN. The directory passes a Want ("the nearest 8 pharmacies") with each
+lookup. A source with pushdown=True (PostGIS) answers it in its query and
+returns just those rows; any other source ignores it and returns everything.
+The directory runs the same filtering either way, so the answer is the same;
+pushdown only decides how many rows cross the wire and get filtered in Python.
+
+Both report an unreachable directory with the SAME typed error payload,
+because "the lookup failed" and "nothing was found" are different facts and
+the model once conflated them.
 """
 
 from __future__ import annotations
@@ -21,14 +29,34 @@ import os
 import threading
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
 
-from careroute.maps.postgis import GeoDatabase, GeoUnavailable
-from careroute.providers.osm.matching import PHARMACY_NAME_RE
+from careroute.maps.postgis import KINDS, GeoDatabase, GeoUnavailable
+from careroute.providers.osm.matching import (DIRECTORY_AMENITIES, PHARMACY_NAME_RE,
+                                              PHARMACY_SHOPS, SpecialtyMatcher)
 
 Elements = list[dict]
+
+
+@dataclass(frozen=True)
+class Want:
+    """What the directory will keep from one lookup.
+
+    kind:  "any" | "general" | "pharmacy" | "specialty" | "er"
+    limit: how many it will look at (its shortlist size)
+    """
+    kind: str
+    limit: int
+    specialty: str | None = None
+
+    def __post_init__(self):
+        if self.kind not in KINDS:
+            raise ValueError(f"unknown lookup kind {self.kind!r}")
+        if (self.kind == "specialty") != (self.specialty is not None):
+            raise ValueError("specialty is required for, and only for, kind='specialty'")
 
 
 def unreachable_payload(last_error) -> dict:
@@ -53,29 +81,53 @@ def unreachable_payload(last_error) -> dict:
 
 class ElementSource(ABC):
     name: str = "abstract"
+    # True: elements() honours `want` and count() is implemented.
+    pushdown: bool = False
 
     @abstractmethod
-    async def elements(self, lat: float, lng: float, radius_m: int) -> tuple[Elements | None, dict | None]:
-        """(elements, None) on success, (None, error_payload) on failure."""
+    async def elements(self, lat: float, lng: float, radius_m: int,
+                       want: Want | None = None) -> tuple[Elements | None, dict | None]:
+        """(elements, None) on success, (None, error_payload) on failure.
+        A source without pushdown ignores `want` and returns everything."""
+
+    async def count(self, lat: float, lng: float, radius_m: int) -> tuple[int | None, dict | None]:
+        """(facilities in the radius, None), or (None, error_payload).
+        Only pushdown sources need it: for the others the directory counts
+        the full list it already has."""
+        raise NotImplementedError
 
 
 class PostgisSource(ElementSource):
     """One indexed spatial query; no cache needed (every replica shares it)."""
     name = "postgis"
+    pushdown = True
 
     def __init__(self, db: GeoDatabase):
         self.db = db
 
-    async def elements(self, lat, lng, radius_m):
+    async def elements(self, lat, lng, radius_m, want=None):
         t0 = time.perf_counter()
         try:
-            rows = await self.db.nearby_elements(lat, lng, radius_m)
+            if want is None:
+                rows = await self.db.nearby_elements(lat, lng, radius_m)
+            else:
+                m = SpecialtyMatcher(want.specialty) if want.specialty else None
+                rows = await self.db.facilities(
+                    lat, lng, radius_m, kind=want.kind, limit=want.limit,
+                    key=m.key if m else None, stem=m.stem if m else None)
         except GeoUnavailable as e:
             print(f"[osm] postgis lookup failed: {e}")
             return None, unreachable_payload(e)
-        print(f"[osm] postgis r={radius_m} rows={len(rows)} "
+        print(f"[osm] postgis r={radius_m} {want.kind if want else 'all'} rows={len(rows)} "
               f"took {(time.perf_counter() - t0) * 1000:.0f}ms")
         return rows, None
+
+    async def count(self, lat, lng, radius_m):
+        try:
+            return await self.db.count_nearby(lat, lng, radius_m), None
+        except GeoUnavailable as e:
+            print(f"[osm] postgis count failed: {e}")
+            return None, unreachable_payload(e)
 
 
 class OverpassDiskCache:
@@ -170,18 +222,21 @@ class OverpassSource(ElementSource):
     @staticmethod
     def build_query(lat, lng, radius_m) -> str:
         # Both tagging schemes (amenity=*, healthcare=*), chemist shops, and
-        # generic shops whose NAME says chemist. infra/geo/healthcare.lua
-        # mirrors this filter for PostGIS.
+        # generic shops whose NAME says chemist: matching.in_directory(),
+        # built from the same constants. The PostGIS import applies
+        # in_directory() itself.
         a = f"(around:{radius_m},{lat},{lng})"
+        amenities = "|".join(DIRECTORY_AMENITIES)
+        shops = "|".join(PHARMACY_SHOPS)
         return f"""
     [out:json][timeout:25];
     (
-      node["amenity"~"hospital|clinic|doctors|pharmacy"]{a};
-      way["amenity"~"hospital|clinic|doctors|pharmacy"]{a};
+      node["amenity"~"{amenities}"]{a};
+      way["amenity"~"{amenities}"]{a};
       node["healthcare"]{a};
       way["healthcare"]{a};
-      node["shop"~"chemist|pharmacy|medical_supply|medical"]{a};
-      way["shop"~"chemist|pharmacy|medical_supply|medical"]{a};
+      node["shop"~"{shops}"]{a};
+      way["shop"~"{shops}"]{a};
       node["shop"]["name"~"{PHARMACY_NAME_RE}",i]{a};
       way["shop"]["name"~"{PHARMACY_NAME_RE}",i]{a};
     );
@@ -215,7 +270,8 @@ class OverpassSource(ElementSource):
             for t in pending:
                 t.cancel()
 
-    async def elements(self, lat, lng, radius_m):
+    async def elements(self, lat, lng, radius_m, want=None):
+        # `want` is ignored: one cached fetch serves every kind of lookup.
         now = time.time()
         hit = self.cache.find(lat, lng, radius_m, now)
         if hit:

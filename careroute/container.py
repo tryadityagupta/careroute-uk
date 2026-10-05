@@ -44,6 +44,7 @@ from careroute.observability.interaction_log import InteractionLogger
 from careroute.providers.base import ProviderDirectory
 from careroute.providers.dummy import JsonProviderDirectory
 from careroute.providers.osm.directory import OsmProviderDirectory
+from careroute.providers.osm.matching import RULES_VERSION
 from careroute.providers.osm.sources import (ElementSource, OverpassDiskCache,
                                              OverpassSource, PostgisSource)
 from careroute.security.gate import RequestGate
@@ -90,7 +91,8 @@ class Container:
     def geo_db(self) -> GeoDatabase:
         s = self.settings
         return GeoDatabase(s.geo_dsn, pool_max=s.geo_pool_max,
-                           statement_timeout_ms=s.geo_statement_timeout_ms)
+                           statement_timeout_ms=s.geo_statement_timeout_ms,
+                           rules_version=RULES_VERSION)
 
     @cached_property
     def checkpointers(self) -> CheckpointerFactory:

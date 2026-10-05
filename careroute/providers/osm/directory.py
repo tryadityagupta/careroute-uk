@@ -14,6 +14,11 @@ bugs came from that, both fixed by STRUCTURE rather than prompting:
 
 Lesson: a prompt instruction is advisory; a data structure and a code guard
 are enforced.
+
+Every lookup tells the source what it will keep (a Want). PostGIS applies it
+in SQL and sends only those rows; Overpass ignores it and sends everything.
+The filtering below runs either way, so both give the same answer; on
+PostGIS it just has ~8 rows to look at instead of ~3,000.
 """
 
 from __future__ import annotations
@@ -21,9 +26,8 @@ from __future__ import annotations
 from careroute.maps.distance import haversine_km
 from careroute.maps.routing import OsrmRouter
 from careroute.providers.base import ProviderDirectory
-from careroute.providers.osm.matching import (SpecialtyMatcher, is_narrow_specialty,
-                                              looks_like_pharmacy)
-from careroute.providers.osm.sources import ElementSource
+from careroute.providers.osm.matching import Facility, SpecialtyMatcher, is_narrow_specialty
+from careroute.providers.osm.sources import ElementSource, Want
 
 # Keys used internally, stripped before a payload reaches the model.
 _PRIVATE_KEYS = ("_tag_tokens", "_signal", "_er")
@@ -52,6 +56,21 @@ class OsmProviderDirectory(ProviderDirectory):
         return max(cls.MIN_RADIUS_M, min(int(radius_m), cls.MAX_RADIUS_M))
 
     @staticmethod
+    def shortlist_size(k: int) -> int:
+        """How many straight-line candidates get upgraded to road distance."""
+        return max(k + 4, 8)
+
+    @property
+    def pushes_down(self) -> bool:
+        # getattr: test doubles may duck-type the source without the flag.
+        return getattr(self.source, "pushdown", False)
+
+    async def _elements(self, lat, lng, radius_m, want: Want | None):
+        if want is not None and self.pushes_down:
+            return await self.source.elements(lat, lng, radius_m, want=want)
+        return await self.source.elements(lat, lng, radius_m)
+
+    @staticmethod
     def dedupe(items: list[dict]) -> list[dict]:
         """Big facilities exist as a node AND a way (NIMHANS showed up twice).
         Keep the nearest instance; callers pass distance-sorted lists."""
@@ -65,13 +84,15 @@ class OsmProviderDirectory(ProviderDirectory):
         return out
 
     async def fetch_nearby(self, lat: float, lng: float, radius_m: int,
-                     specialty: str | None = None):
+                           specialty: str | None = None, want: Want | None = None):
         """(facilities, None) sorted nearest-first, or (None, error_payload).
 
         Used by all three lookups AND the emergency service, so source, distance
-        math and specialty matching live in exactly one place.
+        math and specialty matching live in exactly one place. `want` lets a
+        pushdown source return only what the caller will keep; without it (or
+        with a source that ignores it) every facility in the radius comes back.
         """
-        elements, err = await self.source.elements(lat, lng, radius_m)
+        elements, err = await self._elements(lat, lng, radius_m, want)
         if err:
             return None, err
         matches = SpecialtyMatcher(specialty) if specialty else None
@@ -86,40 +107,24 @@ class OsmProviderDirectory(ProviderDirectory):
             # A cache hit may come from a LARGER-radius fetch.
             if dist * 1000 > radius_m:
                 continue
-            name = tags.get("name")
-            if not name:          # a place you cannot name cannot be recommended
+            fac = Facility.from_tags(tags)
+            if fac is None:       # a place you cannot name cannot be recommended
                 continue
-            amenity = (tags.get("amenity") or "").lower()
-            healthcare = (tags.get("healthcare") or "").lower()
-            shop = (tags.get("shop") or "").lower()
             item = {
-                "name": name,
-                "facility": (tags.get("amenity") or tags.get("healthcare")
-                             or tags.get("shop") or "healthcare"),
+                "name": fac.name,
+                "facility": fac.facility,
                 "lat": plat,
                 "lng": plng,
                 "distance_km": dist,
-                "is_pharmacy": looks_like_pharmacy(name, amenity, healthcare, shop),
+                "is_pharmacy": fac.is_pharmacy,
                 # What the place IS, lowered: for the narrow-clinic filter.
-                "_signal": " ".join((name.lower(), amenity, healthcare, shop,
-                                     tags.get("healthcare:speciality", "").lower())),
+                "_signal": fac.signal,
                 # OSM emergency=yes|no — used by the emergency service.
-                "_er": (tags.get("emergency") or "").lower(),
+                "_er": fac.er,
             }
             if matches:
-                # Speciality tags are often long ";" lists, sometimes pasted
-                # across many POIs; substring-matching the blob confirmed a
-                # DENTAL clinic for Psychiatry. Match token by token and record
-                # the evidence so no match is ever opaque.
-                raw_tag = tags.get("healthcare:speciality", "")
-                tokens = [t.strip().lower() for t in raw_tag.split(";") if t.strip()]
-                if matches(name):
-                    item.update(specialty_match=True, matched_via="name")
-                elif any(matches(t) for t in tokens):
-                    item.update(specialty_match=True, matched_via="speciality_tag",
-                                speciality_tag=raw_tag, _tag_tokens=len(tokens))
-                else:
-                    item["specialty_match"] = False
+                # Token-by-token, with the evidence recorded (see Facility.match).
+                item.update(fac.match(matches))
             out.append(item)
         out.sort(key=lambda r: r["distance_km"])
         return out, None
@@ -127,7 +132,7 @@ class OsmProviderDirectory(ProviderDirectory):
     async def _shortlist_by_road(self, lat, lng, items: list[dict], k: int, sort_key) -> list[dict]:
         """Shortlist on the cheap straight-line order, upgrade JUST those to
         road distance (one OSRM call), re-rank, take k."""
-        shortlist = items[:max(k + 4, 8)]
+        shortlist = items[:self.shortlist_size(k)]
         await self.router.annotate(lat, lng, shortlist)
         shortlist.sort(key=sort_key)
         top = shortlist[:k]
@@ -137,7 +142,9 @@ class OsmProviderDirectory(ProviderDirectory):
     # --- the three lookups -----------------------------------------------------
     async def find_providers(self, specialty, patient_lat, patient_lng, k=3, radius_m=8000):
         radius_m = self.clamp_radius(radius_m)
-        facilities, err = await self.fetch_nearby(patient_lat, patient_lng, radius_m, specialty)
+        facilities, err = await self.fetch_nearby(
+            patient_lat, patient_lng, radius_m, specialty,
+            want=Want("specialty", self.shortlist_size(k), specialty))
         if err:
             return err
 
@@ -154,6 +161,18 @@ class OsmProviderDirectory(ProviderDirectory):
         # Miss: hand back the nearest GENERAL facilities now (labelled, with road
         # distance) so a minor complaint isn't forced to chase a far specialist.
         # Narrow boutiques are dropped unless that would leave nothing.
+        if self.pushes_down:
+            # `facilities` holds only (zero) matches: ask for the alternatives
+            # and the count separately. Two small indexed queries.
+            facilities, err = await self.fetch_nearby(patient_lat, patient_lng, radius_m,
+                                                      want=Want("general", 3))
+            if err:
+                return err
+            nearby_count, err = await self.source.count(patient_lat, patient_lng, radius_m)
+            if err:
+                return err
+        else:
+            nearby_count = len(facilities)
         general = [f for f in self.dedupe(facilities) if not is_narrow_specialty(f)]
         alternatives = (general or self.dedupe(facilities))[:3]
         await self.router.annotate(patient_lat, patient_lng, alternatives)
@@ -167,7 +186,7 @@ class OsmProviderDirectory(ProviderDirectory):
             "specialty_requested": specialty,
             "reason": f"No facility matching '{specialty}' within {radius_m / 1000:.1f} km.",
             "radius_searched_m": radius_m,
-            "general_facilities_nearby": len(facilities),
+            "general_facilities_nearby": nearby_count,
             "general_alternatives": alternatives,
             "general_alternatives_disclaimer": (
                 f"These are the nearest GENERAL facilities, NOT {specialty} "
@@ -183,7 +202,8 @@ class OsmProviderDirectory(ProviderDirectory):
 
     async def find_general_facilities(self, patient_lat, patient_lng, k=3, radius_m=8000):
         radius_m = self.clamp_radius(radius_m)
-        facilities, err = await self.fetch_nearby(patient_lat, patient_lng, radius_m)
+        facilities, err = await self.fetch_nearby(
+            patient_lat, patient_lng, radius_m, want=Want("general", self.shortlist_size(k)))
         if err:
             return err
         if not facilities:
@@ -201,7 +221,8 @@ class OsmProviderDirectory(ProviderDirectory):
 
     async def find_pharmacies(self, patient_lat, patient_lng, k=3, radius_m=8000):
         radius_m = self.clamp_radius(radius_m)
-        facilities, err = await self.fetch_nearby(patient_lat, patient_lng, radius_m)
+        facilities, err = await self.fetch_nearby(
+            patient_lat, patient_lng, radius_m, want=Want("pharmacy", self.shortlist_size(k)))
         if err:
             return err
         pharmacies = self.dedupe([f for f in facilities if f.get("is_pharmacy")])

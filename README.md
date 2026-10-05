@@ -432,14 +432,24 @@ Compose stack hosts all three itself, from one Karnataka OpenStreetMap extract:
 
 | Need | Public service (demo) | Self-hosted (Compose) |
 |---|---|---|
-| Find providers | Overpass mirrors, 2–25 s | PostGIS spatial query, ~50 ms at 8 km |
+| Find providers | Overpass mirrors, 2–25 s | PostGIS query, 4–15 ms at 8 km, ~1 ms of app CPU |
 | Road distance / ETA | router.project-osrm.org | `osrm` container (MLD, car profile) |
 | Place name → lat/lng, country | nominatim.openstreetmap.org (1 req/s) | `nominatim` container, unthrottled |
 
-Same OSM data, same code path: `infra/geo/healthcare.lua` imports exactly the tags
-the Overpass query asked for, and PostGIS rows come back in Overpass's element
-shape, so every filter in `careroute/providers/osm/` runs unchanged. `OSM_SOURCE` picks the
-source (`overpass` default, `postgis` in Compose).
+Same OSM data, same rules. `infra/geo/healthcare.lua` is only a coarse
+pre-filter; the import then runs `careroute/providers/osm/classify.py`, which
+applies the app's own rules (`matching.py`: directory membership, pharmacy,
+narrow boutique, ER candidate, specialty ids) to every row once and stores the
+answers as columns. A lookup filters, dedupes and cuts in SQL and returns only
+the ~8 rows the directory will look at, instead of every POI in the radius
+being regex-filtered on the event loop. The directory still runs its normal
+filtering on what comes back (so Overpass and PostGIS answer identically —
+`tests/test_geo_pushdown.py` checks ~2,000 lookups for identical payloads).
+`OSM_SOURCE` picks the source (`overpass` default, `postgis` in Compose).
+
+Measured on a 13,500-row synthetic city (`python -m scripts.bench_geo <dsn>`,
+one sandbox CPU), per lookup, app-process CPU p50: 19–25 ms → ~1 ms at 8 km,
+80–130 ms → ~1.3 ms at 30 km.
 
 One-time setup (Docker should have about 8 GB of RAM available):
 
@@ -456,6 +466,10 @@ geocoding by place name fails, and everything else works. `/healthz` reports
 the directory's row count and data date under `info.provider_directory`.
 
 Refreshing the data: re-run `geo-fetch` with `FORCE=1`, then `geo-import`.
+Re-run `geo-import` too whenever `matching.py` changes: the stored
+classifications were computed with the old rules, and `/healthz` shows
+`rules_current: false` until you do. An app newer than the imported schema
+reports the directory unavailable with "re-run the import".
 The import builds schema `geo_import` and swaps it in for `geo` in one
 transaction, so running replicas never see a half-built table.
 
@@ -553,6 +567,7 @@ GEO_TEST_DATABASE_URL=postgresql://careroute:careroute@localhost:5432/careroute 
 | `test_dummy_directory.py` | offline directory and both structured-miss paths |
 | `test_interaction_log.py` | PII omitted, coordinates coarsened |
 | `test_geo.py` | the real `infra/geo/import.sh` on a fixture, then PostGIS lookups |
+| `test_geo_pushdown.py` | SQL pushdown gives the same payloads as Python filtering, on a synthetic city |
 | `test_pharmacy_coverage.py` | chemist detection and long Indian addresses |
 | `test_mock_llm.py` | mock model policy, OpenAI wire format, faults, full stack |
 | `test_stateless.py` | real replica processes: replica hop, hard kill, shared rate limit, turn lock |

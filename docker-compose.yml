@@ -138,7 +138,9 @@ services:
     command: [ "/geo/import.sh" ]
     environment:
       GEO_DATABASE_URL: postgresql://careroute:careroute@postgres:5432/careroute
-    volumes: [ "./data/osm:/data/osm:ro" ]
+      # classify.py runs the app's own matching rules on every row
+      CAREROUTE_SRC: /app
+    volumes: [ "./data/osm:/data/osm:ro", "./careroute:/app/careroute:ro" ]
     depends_on:
       postgres: { condition: service_healthy }
 

@@ -1,28 +1,28 @@
 -- infra/geo/healthcare.lua — osm2pgsql flex style for CareRoute's provider directory.
 --
--- Mirrors the Overpass query in careroute/providers/osm/sources.py tag-for-tag, so the
--- OSM directory's filtering
--- (specialty matching, narrow-clinic filter, ER detection) sees the same data
--- whether it came from Overpass or from here:
+-- A deliberately COARSE first pass. It keeps every named element that could
+-- possibly be in the directory:
 --
 --   amenity  in hospital|clinic|doctors|pharmacy
 --   healthcare = *            (the newer tagging scheme)
---   shop     in chemist|pharmacy|medical_supply|medical
---   shop=* whose name says chemist ("... Medicals", "... Pharma")
+--   shop = *                  (any shop: "X Medicals" on shop=yes is a chemist)
 --
--- Two deliberate differences from the Overpass query:
---   * Unnamed POIs are dropped at import. The directory discarded them anyway ("a
---     place you cannot name cannot be recommended"), so storing them only
---     makes every spatial query read rows it will throw away.
+-- and nothing else is decided here. infra/geo/import.sh then runs every row
+-- through careroute/providers/osm/classify.py, which applies the directory's
+-- own rules (matching.py: in_directory, pharmacy, narrow, ER, specialties)
+-- and drops what is not in the directory. Those rules used to be half-copied
+-- into this file with a "keep in sync" comment; now there is one copy.
+-- (tests/test_geo_pushdown.py checks AMENITY below equals
+-- DIRECTORY_AMENITIES, the one list this pass must not narrow.)
+--
+-- Differences from the Overpass query, both deliberate:
+--   * Unnamed POIs are dropped here. The directory discards them anyway ("a
+--     place you cannot name cannot be recommended").
 --   * Multipolygon RELATIONS are included. Large hospital campuses are often
 --     mapped as relations, which the Overpass query (node + way only) missed.
 --
 -- Every object becomes ONE point (ways/relations -> centroid), the same thing
--- Overpass's `out center` gave us. The full tag set is kept as jsonb so
--- the directory can read healthcare:speciality, emergency, etc. exactly as before.
---
--- Run by infra/geo/import.sh, which imports into schema geo_import and then swaps
--- it in atomically, so a refresh never leaves the app with a half-built table.
+-- Overpass's `out center` gave us. The full tag set is kept as jsonb.
 
 local SCHEMA = os.getenv("GEO_IMPORT_SCHEMA") or "geo_import"
 
@@ -41,28 +41,14 @@ local healthcare = osm2pgsql.define_table({
 })
 
 local AMENITY = { hospital = true, clinic = true, doctors = true, pharmacy = true }
-local SHOP = { chemist = true, pharmacy = true, medical_supply = true, medical = true }
 
--- Keep in sync with PHARMACY_NAME_RE in careroute/providers/osm/matching.py (Lua patterns, lowercased name).
-local PHARMACY_NAME = { "medical", "pharma", "chemist", "drug ?store", "aushadh" }
-
-local function pharmacy_by_name(tags)
-    if not tags.shop or not tags.name then return false end
-    local n = string.lower(tags.name)
-    for _, pat in ipairs(PHARMACY_NAME) do
-        if string.find(n, pat) then return true end
-    end
-    return false
-end
-
-local function is_healthcare(tags)
-    return AMENITY[tags.amenity] or tags.healthcare ~= nil or SHOP[tags.shop]
-        or pharmacy_by_name(tags)
+local function candidate(tags)
+    return AMENITY[tags.amenity] or tags.healthcare ~= nil or tags.shop ~= nil
 end
 
 local function insert(object, geom)
     local tags = object.tags
-    if not tags.name or not is_healthcare(tags) or geom == nil then
+    if not tags.name or not candidate(tags) or geom == nil then
         return
     end
     healthcare:insert({

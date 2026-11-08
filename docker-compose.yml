@@ -31,9 +31,20 @@
 services:
   redis:
     image: redis:7-alpine
-    # Sessions/rate limits are disposable by design (TTLs), so no persistence;
-    # evict least-recently-used keys rather than erroring if memory fills.
-    command: [ "redis-server", "--save", "", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru" ]
+    # Redis holds more than disposable sessions now: UK CareRoute keeps the
+    # booking ledger, audit log, consent grants, thread ownership and
+    # idempotency keys here (careroute/uk/store.py). So:
+    #   --appendonly yes        every write goes to an append-only file on the
+    #                           redis-data volume and survives a restart
+    #   --appendfsync everysec  at most ~1 s of writes lost on a crash
+    #   noeviction              a full Redis refuses writes (the API answers
+    #                           503) instead of silently dropping a booking or
+    #                           an idempotency key; TTLs keep memory bounded
+    # Production: the records of truth move to Postgres tables (README, next
+    # steps) and Redis goes back to disposable state.
+    command: [ "redis-server", "--appendonly", "yes", "--appendfsync", "everysec",
+               "--save", "", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction" ]
+    volumes: [ "redis-data:/data" ]
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 2s
@@ -55,7 +66,11 @@ services:
       POSTGRES_DB: careroute
     volumes: [ "pgdata:/var/lib/postgresql/data" ]
     healthcheck:
-      test: [ "CMD", "pg_isready", "-U", "careroute" ]
+      # -h 127.0.0.1 forces TCP. On a brand-new volume the image first runs a
+      # temporary server on the Unix socket only (to create the database and
+      # load PostGIS); a socket check passes then, and migrate's TCP
+      # connection is refused. Over TCP the check passes only on the real start.
+      test: [ "CMD-SHELL", "pg_isready -h 127.0.0.1 -U careroute" ]
       interval: 2s
       retries: 30
 
@@ -176,4 +191,5 @@ services:
 
 volumes:
   pgdata:
+  redis-data:
   nominatim-data:

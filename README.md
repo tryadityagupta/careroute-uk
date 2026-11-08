@@ -143,7 +143,7 @@ tests/test_uk_*.py         UK tests (units, journeys, HTTP, NHS login, Notify)
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /chat` | New message on a thread. JSON, or SSE with `?stream=1` (progress, then the result) |
+| `POST /chat` | New message on a thread. JSON, or SSE with `?stream=1`: `status` lines before each piece of work, `step`/`progress` after it, then the `result` |
 | `POST /chat/resume` | Answer a paused interrupt: `{option_id}`, `{text}` (limits), `{slot_id, consent}` |
 | `GET /chat/{thread_id}` | History and current pause, for reloads and other devices |
 | `POST /referrals/events` | A referral arrives (`{ubrn}`, `X-Event-Key`): starts a Path B thread, idempotently |
@@ -173,6 +173,7 @@ UK-specific settings:
 ## Tests
 
 ```bash
+pip install -r requirements-dev.txt  # the app's requirements plus pytest
 python -m pytest                     # everything, offline, no key
 python -m pytest tests/test_uk_*.py  # just UK CareRoute
 ```

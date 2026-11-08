@@ -1,4 +1,4 @@
-name: UK CareRoute: test, then deploy to Azure
+name: "UK CareRoute: test, then deploy to Azure"
 
 on:
   push:
@@ -48,7 +48,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pytest
+        run: pip install -r requirements-dev.txt
 
       - name: Install map tooling for the PostGIS tests
         run: |

@@ -1,0 +1,5 @@
+# Everything the app needs, plus test tools. The Docker image installs only
+# requirements.txt, so nothing here ships to production.
+#   pip install -r requirements-dev.txt
+-r requirements.txt
+pytest==9.2.0

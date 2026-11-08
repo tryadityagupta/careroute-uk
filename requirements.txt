@@ -19,6 +19,5 @@ redis==8.1.0
 psycopg[binary]==3.3.6
 psycopg-pool==3.3.3
 langgraph-checkpoint-postgres==3.1.2
-# Test-only: drives test_stateless.py (already a FastAPI TestClient dependency)
+# HTTP client for OSRM, Nominatim and postcodes.io; also FastAPI's TestClient
 httpx==0.28.1
-pytest

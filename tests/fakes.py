@@ -116,3 +116,46 @@ def as_async(value):
     async def stub(*args, **kwargs):
         return value
     return stub
+
+
+# --- UK CareRoute ------------------------------------------------------------
+UK_NOW = __import__("datetime").datetime(2026, 10, 13, 9, 0)      # a Tuesday, 10am BST
+PRIYA, ARJUN, MAYA, TOM, MARGARET, SAM = (
+    "9990010102", "9990010218", "9990010307", "9990010404", "9990010501", "9990010609")
+
+
+class NoLlmSteps:
+    """Fails the test if any single-shot LLM step runs."""
+
+    async def identify_subject(self, *a, **k):
+        raise AssertionError("identify_subject must not run")
+
+    async def triage(self, *a, **k):
+        raise AssertionError("LLM triage must not run")
+
+    async def extract_preferences(self, *a, **k):
+        raise AssertionError("extract_preferences must not run")
+
+
+def make_uk_container(route_model=None, steps=None, **settings_overrides) -> Container:
+    """Offline LLM steps and route model unless replaced, no network geocoding,
+    a fixed clock. Replace parts BEFORE first use of c.journey."""
+    from careroute.uk.clock import FixedClock
+    c = make_container(**{"llm_mode": "offline", "uk_geocode_network": False,
+                          **settings_overrides})
+    c.uk_clock = FixedClock(UK_NOW)
+    if steps is not None:
+        c.uk_steps = steps
+    if route_model is not None:
+        c.uk_route_model = route_model
+    return c
+
+
+async def uk_chat(c, who, message, thread_id=None, **kw) -> dict:
+    svc = c.journey_service
+    return await svc.collect(svc.stream_chat(who, message=message, thread_id=thread_id, **kw))
+
+
+async def uk_resume(c, who, thread_id, value) -> dict:
+    svc = c.journey_service
+    return await svc.collect(svc.stream_resume(who, thread_id=thread_id, value=value))

@@ -24,7 +24,7 @@
 set -euo pipefail
 
 DSN="${GEO_DATABASE_URL:-${DATABASE_URL:?set DATABASE_URL or GEO_DATABASE_URL}}"
-PBF="${PBF:-/data/osm/karnataka.osm.pbf}"
+PBF="${PBF:-/data/osm/region.osm.pbf}"
 STYLE="${STYLE:-/geo/healthcare.lua}"
 META="${PBF%.osm.pbf}.extract_date"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -10,15 +10,17 @@
 #
 # Map data is self-hosted (step 2): providers come from PostGIS, road distance
 # from a local OSRM, geocoding from a local Nominatim, all built from the same
-# Karnataka OSM extract. One-time setup (see README "Self-hosted map data"):
+# West Yorkshire OSM extract. One-time setup (see README "Self-hosted map data"):
 #   docker compose --profile geo-setup run --rm geo-fetch    # download + clip
 #   docker compose --profile geo-setup run --rm geo-import   # -> PostGIS
 #   docker compose --profile geo-setup run --rm osrm-prep    # routing graph
 # Skip it and the app still starts: lookups report the directory unavailable,
 # distances fall back to straight-line, and the emergency number still works.
 #
-# Needs OPENAI_API_KEY in .env. To run without spending tokens, add these two
-# lines to .env and start with the mock profile:
+# UK CareRoute runs with no key at all: leave OPENAI_API_KEY empty (or set
+# CAREROUTE_LLM=offline) and the journey uses deterministic offline steps.
+# With a key it uses gpt-4o-mini. For load tests of the LEGACY agent, add
+# these two lines to .env and start with the mock profile:
 #   OPENAI_API_KEY=mock
 #   OPENAI_BASE_URL=http://mock-llm:9100/v1
 #   docker compose --profile mock up --build --scale app=3
@@ -73,6 +75,7 @@ services:
       OSM_SOURCE: postgis
       OSRM_BASE_URL: http://osrm:5000
       NOMINATIM_URL: http://nominatim:8080
+      CAREROUTE_GEOCODE_COUNTRIES: gb
     depends_on:
       postgres: { condition: service_healthy }
 
@@ -104,7 +107,7 @@ services:
     # is not reliably published. On an ARM machine (Apple silicon) use the
     # -arm64-debian variant here and in osrm-prep below.
     image: ghcr.io/project-osrm/osrm-backend:v26.5.0-amd64-debian
-    command: [ "osrm-routed", "--algorithm", "mld", "/data/osm/karnataka.osrm" ]
+    command: [ "osrm-routed", "--algorithm", "mld", "/data/osm/region.osrm" ]
     volumes: [ "./data/osm:/data/osm:ro" ]
     ports: [ "127.0.0.1:5000:5000" ] # for manual checks only
     restart: unless-stopped
@@ -115,7 +118,7 @@ services:
   nominatim:
     image: mediagis/nominatim:5.3
     environment:
-      PBF_PATH: /nominatim/data/karnataka.osm.pbf
+      PBF_PATH: /nominatim/data/region.osm.pbf
       IMPORT_WIKIPEDIA: "false"
       THREADS: "4"
     volumes:

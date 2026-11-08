@@ -1,700 +1,573 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="en-GB">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CareRoute — find nearby care</title>
-
-    <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect width='48' height='48' rx='12' fill='%23DD5410'/><path d='M21,11h6v10h10v6H27v10h-6V27H11v-6h10z' fill='%23fff'/></svg>">
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Hanken+Grotesk:wght@400;500;600&display=swap"
-        rel="stylesheet">
-
-    <style>
-        :root {
-            --bg: #FFFBF8;
-            --panel: #FFFFFF;
-            --field: #FFF8F3;
-            --ink: #2A1E17;
-            --muted: #7C6A5E;
-            --muted-2: #C9B7AC;
-            --line: #F0DED2;
-            --orange: #DD5410;
-            --orange-2: #F2731B;
-            --orange-deep: #B84309;
-            --tint: #FFF0E6;
-            --shadow: 0 12px 34px rgba(221, 84, 16, .10), 0 2px 6px rgba(42, 30, 23, .05);
-            --font-display: "Bricolage Grotesque", "Hanken Grotesk", system-ui, sans-serif;
-            --font-body: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        html {
-            -webkit-text-size-adjust: 100%;
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            font-family: var(--font-body);
-            color: var(--ink);
-            background: var(--bg);
-            line-height: 1.5;
-            position: relative;
-            overflow-x: hidden;
-        }
-
-        body::before {
-            content: "";
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, var(--orange-2), var(--orange));
-            z-index: 3;
-        }
-
-        .bg-cross {
-            position: absolute;
-            top: -70px;
-            right: -70px;
-            width: 320px;
-            height: 320px;
-            opacity: .05;
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        .page {
-            position: relative;
-            z-index: 1;
-            width: 100%;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 40px 20px 56px;
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 44px;
-        }
-
-        .mark {
-            width: 42px;
-            height: 42px;
-            flex: none;
-            filter: drop-shadow(0 4px 10px rgba(221, 84, 16, .28));
-        }
-
-        .brand-name {
-            font-family: var(--font-display);
-            font-weight: 700;
-            font-size: 1.25rem;
-            letter-spacing: -0.01em;
-        }
-
-        h1 {
-            font-family: var(--font-display);
-            font-weight: 700;
-            font-size: clamp(1.9rem, 6vw, 2.6rem);
-            line-height: 1.08;
-            letter-spacing: -0.02em;
-            margin: 0 0 12px;
-        }
-
-        .sub {
-            color: var(--muted);
-            font-size: 1.02rem;
-            max-width: 46ch;
-            margin: 0 0 28px;
-        }
-
-        .panel {
-            background: var(--panel);
-            border: 1px solid var(--line);
-            border-radius: 18px;
-            padding: 22px;
-            box-shadow: var(--shadow);
-        }
-
-        .field-label {
-            display: block;
-            font-weight: 600;
-            font-size: 0.98rem;
-            margin-bottom: 8px;
-        }
-
-        textarea {
-            width: 100%;
-            min-height: 104px;
-            resize: vertical;
-            font: inherit;
-            color: var(--ink);
-            background: var(--field);
-            border: 1.5px solid var(--line);
-            border-radius: 10px;
-            padding: 13px 14px;
-            transition: border-color .15s ease, box-shadow .15s ease;
-        }
-
-        textarea::placeholder {
-            color: var(--muted-2);
-        }
-
-        .text-field {
-            width: 100%;
-            font: inherit;
-            color: var(--ink);
-            background: var(--field);
-            border: 1.5px solid var(--line);
-            border-radius: 10px;
-            padding: 11px 14px;
-        }
-
-        .text-field::placeholder {
-            color: var(--muted-2);
-        }
-
-        .text-field:focus-visible {
-            outline: none;
-            border-color: var(--orange);
-            box-shadow: 0 0 0 4px rgba(221, 84, 16, .14);
-        }
-
-        .opt {
-            color: var(--muted-2);
-            font-weight: 400;
-        }
-
-        .field-label.sm {
-            font-size: 0.88rem;
-            font-weight: 500;
-            color: var(--muted);
-        }
-
-        .opt-details {
-            margin-top: 16px;
-            padding-top: 6px;
-            border-top: 1px dashed var(--line);
-        }
-
-        .opt-details>summary {
-            cursor: pointer;
-            list-style: none;
-            display: flex;
-            align-items: center;
-            gap: 9px;
-            padding: 6px 0;
-            font-size: 0.9rem;
-            color: var(--muted);
-            user-select: none;
-        }
-
-        .opt-details>summary::-webkit-details-marker {
-            display: none;
-        }
-
-        .opt-details>summary::before {
-            content: "+";
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 18px;
-            height: 18px;
-            flex: none;
-            border: 1.5px solid var(--muted-2);
-            border-radius: 6px;
-            font-weight: 600;
-            line-height: 1;
-        }
-
-        .opt-details[open]>summary::before {
-            content: "\2212";
-        }
-
-        .opt-details>summary:hover {
-            color: var(--ink);
-        }
-
-        .opt-body {
-            margin-top: 10px;
-        }
-
-        textarea:focus-visible {
-            outline: none;
-            border-color: var(--orange);
-            box-shadow: 0 0 0 4px rgba(221, 84, 16, .14);
-        }
-
-        .controls {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            margin-top: 14px;
-            flex-wrap: wrap;
-        }
-
-        button#go {
-            font: inherit;
-            font-weight: 600;
-            font-size: 1rem;
-            color: #fff;
-            background: var(--orange);
-            border: 0;
-            border-radius: 10px;
-            padding: 12px 22px;
-            cursor: pointer;
-            transition: background .15s ease, transform .05s ease;
-        }
-
-        button#go:hover {
-            background: var(--orange-deep);
-        }
-
-        button#go:active {
-            transform: translateY(1px);
-        }
-
-        button#go:focus-visible {
-            outline: none;
-            box-shadow: 0 0 0 4px rgba(221, 84, 16, .28);
-        }
-
-        button#go:disabled {
-            opacity: .55;
-            cursor: default;
-        }
-
-        .loc {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 0.9rem;
-            color: var(--muted);
-        }
-
-        .loc::before {
-            content: "";
-            width: 9px;
-            height: 9px;
-            border-radius: 50%;
-            border: 1.5px solid var(--muted-2);
-            background: transparent;
-            flex: none;
-        }
-
-        .loc[data-state="ok"] {
-            color: var(--ink);
-        }
-
-        .loc[data-state="ok"]::before {
-            background: var(--orange);
-            border-color: var(--orange);
-        }
-
-        .loc[data-state="wait"]::before {
-            background: var(--orange);
-            border-color: var(--orange);
-            animation: pulse 1.2s ease-in-out infinite;
-        }
-
-        .kbd-hint {
-            margin: 6px 2px 0;
-            font-size: 0.8rem;
-            color: var(--muted);
-        }
-
-        .kbd-hint kbd {
-            font: inherit;
-            font-size: 0.75rem;
-            padding: 1px 6px;
-            border: 1px solid var(--line);
-            border-bottom-width: 2px;
-            border-radius: 5px;
-            background: var(--field);
-        }
-
-        /* Phones and tablets have no Shift key: Enter adds a new line there and
-           the button sends, so the hint would be wrong. */
-        @media (pointer: coarse) {
-            .kbd-hint {
-                display: none;
-            }
-        }
-
-        .answer {
-            margin-top: 18px;
-            border-radius: 12px;
-            padding: 16px 18px;
-            font-size: 0.98rem;
-        }
-
-        .answer.is-empty {
-            background: var(--tint);
-            color: var(--orange-deep);
-            border: 1px dashed #F3C7AC;
-        }
-
-        .answer.is-error {
-            background: var(--tint);
-            color: var(--orange-deep);
-            border: 1px solid #F3C7AC;
-        }
-
-        .answer.is-loading {
-            background: var(--panel);
-            border: 1px solid var(--line);
-            color: var(--muted);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .answer.is-results {
-            background: var(--panel);
-            border: 1px solid var(--line);
-            border-left: 4px solid var(--orange);
-            box-shadow: var(--shadow);
-            white-space: pre-wrap;
-            line-height: 1.6;
-            color: var(--ink);
-        }
-
-        .answer.is-results code {
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            font-size: 0.92em;
-            background: var(--tint);
-            padding: 1px 5px;
-            border-radius: 5px;
-        }
-
-        .dots {
-            display: inline-flex;
-            gap: 5px;
-            flex: none;
-        }
-
-        .dots i {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: var(--orange);
-            display: inline-block;
-            animation: bounce 1s ease-in-out infinite;
-        }
-
-        .dots i:nth-child(2) {
-            animation-delay: .15s;
-        }
-
-        .dots i:nth-child(3) {
-            animation-delay: .3s;
-        }
-
-        .note {
-            margin: 22px 2px 0;
-            font-size: 0.85rem;
-            color: var(--muted);
-            line-height: 1.55;
-        }
-
-        .note strong {
-            color: var(--ink);
-            font-weight: 600;
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                transform: scale(1);
-                opacity: 1;
-            }
-
-            50% {
-                transform: scale(1.5);
-                opacity: .5;
-            }
-        }
-
-        @keyframes bounce {
-
-            0%,
-            100% {
-                transform: translateY(0);
-                opacity: .55;
-            }
-
-            50% {
-                transform: translateY(-5px);
-                opacity: 1;
-            }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-
-            .loc::before,
-            .dots i,
-            button#go {
-                animation: none !important;
-                transition: none !important;
-            }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UK CareRoute (demo)</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect width='48' height='48' rx='10' fill='%23005EB8'/><path d='M14 30l7-7 5 5 9-11' stroke='%23fff' stroke-width='5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<style>
+  :root {
+    --blue: #005EB8; --blue-dark: #003087; --ink: #212B32; --ink-2: #4C6272;
+    --page: #F0F4F5; --panel: #FFFFFF; --line: #D8DDE0; --red: #D5281B;
+    --green: #007F3B; --amber: #FFB81C; --focus: #FFEB3B; --pale-blue: #E8F1F8;
+    --font: "Frutiger W01", Frutiger, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: var(--font); color: var(--ink); background: var(--page);
+         font-size: 1rem; line-height: 1.5; }
+  a { color: var(--blue); }
+  :focus-visible { outline: 4px solid var(--focus); outline-offset: 0; box-shadow: 0 4px 0 var(--ink); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+
+  header { background: var(--blue); color: #fff; }
+  .bar { max-width: 1180px; margin: 0 auto; padding: 14px 20px; display: flex; gap: 16px;
+         align-items: center; flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 1.25rem; margin-right: auto; }
+  .brand small { font-weight: 400; opacity: .85; margin-left: 6px; }
+  .who { display: flex; gap: 8px; align-items: center; }
+  .who label { font-size: .9rem; }
+  .who select { padding: 6px 8px; border: 2px solid #fff; border-radius: 4px; background: #fff;
+                color: var(--ink); min-width: 15rem; }
+  .notice { background: #fff; border-bottom: 1px solid var(--line); }
+  .notice p { max-width: 1180px; margin: 0 auto; padding: 10px 20px; font-size: .92rem; color: var(--ink-2); }
+  .notice strong { color: var(--ink); }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 24px 20px 48px; display: grid;
+         grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+
+  h1 { color: var(--blue-dark); font-size: 1.75rem; line-height: 1.2; margin: 0 0 6px; }
+  h2 { color: var(--blue-dark); font-size: 1.15rem; margin: 0 0 10px; }
+  .lede { color: var(--ink-2); margin: 0 0 18px; max-width: 62ch; }
+
+  .convo { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+  .msgs { padding: 20px; min-height: 260px; display: flex; flex-direction: column; gap: 14px; }
+  .empty { color: var(--ink-2); }
+  .empty ul { margin: 8px 0 0; padding-left: 20px; }
+  .empty button { background: none; border: 0; padding: 0; color: var(--blue); text-decoration: underline;
+                  cursor: pointer; text-align: left; }
+  .msg { max-width: 64ch; white-space: pre-wrap; }
+  .msg.user { align-self: flex-end; background: var(--pale-blue); padding: 10px 14px; border-radius: 4px; }
+  .msg.bot { border-left: 4px solid var(--blue); padding: 2px 0 2px 14px; }
+  .msg.bot.emergency { border-left: 0; background: var(--red); color: #fff; padding: 14px 16px;
+                       border-radius: 4px; font-weight: 700; }
+  .msg.bot.urgent { border-left: 6px solid var(--red); background: #fff; padding: 10px 14px;
+                    outline: 1px solid var(--line); }
+  .msg.bot.booked { border-left: 6px solid var(--green); }
+  .msg.error { color: var(--red); }
+
+  .card { border: 1px solid var(--line); border-top: 4px solid var(--blue); border-radius: 4px;
+          padding: 16px; background: #fff; max-width: 66ch; }
+  .card h3 { margin: 0 0 10px; font-size: 1.05rem; color: var(--blue-dark); }
+  .opt { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: #fff;
+         border-radius: 4px; padding: 12px 14px; margin: 0 0 8px; cursor: pointer; }
+  .opt:hover { border-color: var(--blue); }
+  .opt b { display: block; }
+  .opt .meta { color: var(--ink-2); font-size: .92rem; }
+  .bends { margin-top: 6px; font-size: .9rem; color: #6b4300; background: #FFF4D6; padding: 4px 8px;
+           border-radius: 3px; display: inline-block; }
+  .slots { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+  .slot { border: 2px solid var(--blue); background: #fff; color: var(--blue); padding: 6px 12px;
+          border-radius: 4px; cursor: pointer; }
+  .slot[aria-pressed="true"] { background: var(--blue); color: #fff; }
+  dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; }
+  dl.facts dt { color: var(--ink-2); }
+  dl.facts dd { margin: 0; }
+  .actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+  .btn { background: var(--green); color: #fff; border: 0; border-radius: 4px; padding: 10px 18px;
+         font-weight: 700; cursor: pointer; box-shadow: 0 4px 0 #00401e; }
+  .btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #00401e; }
+  .btn[disabled] { background: #8ca39a; box-shadow: none; cursor: not-allowed; }
+  .btn.secondary { background: var(--blue); box-shadow: 0 4px 0 var(--blue-dark); }
+  .link { background: none; border: 0; color: var(--blue); text-decoration: underline; cursor: pointer; padding: 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .chip { border: 1px solid var(--blue); color: var(--blue); background: #fff; border-radius: 999px;
+          padding: 3px 10px; font-size: .9rem; cursor: pointer; }
+
+  form.composer { border-top: 1px solid var(--line); padding: 14px 20px 18px; }
+  form.composer > label { display: block; font-weight: 700; margin-bottom: 6px; }
+  .hint { color: var(--ink-2); font-size: .9rem; margin: 0 0 8px; }
+  textarea, input[type=text] { width: 100%; border: 2px solid var(--ink); border-radius: 0; padding: 8px 10px;
+                               background: #fff; }
+  textarea { min-height: 76px; resize: vertical; }
+  .row { display: flex; gap: 12px; margin-top: 10px; align-items: end; flex-wrap: wrap; }
+  .row .grow { flex: 1 1 200px; }
+  .row label { font-size: .92rem; }
+
+  aside { display: flex; flex-direction: column; gap: 16px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 16px; }
+  .panel p { margin: 0 0 8px; color: var(--ink-2); font-size: .92rem; }
+
+  /* The one bold element: how each step was decided, as it runs. */
+  .trace { background: var(--blue-dark); color: #fff; border: 0; }
+  .trace h2 { color: #fff; }
+  .trace p { color: #c8d6e8; }
+  .trace ol { list-style: none; margin: 0; padding: 0; max-height: 420px; overflow: auto; }
+  .trace li { display: grid; grid-template-columns: 4.2rem 1fr; gap: 10px; padding: 7px 0;
+              border-top: 1px solid rgba(255,255,255,.14); font-size: .94rem; }
+  .trace li.sub { color: #c8d6e8; padding-top: 2px; border-top: 0; }
+  .trace li.turn { display: block; color: #9fb4d0; font-size: .85rem; padding-top: 12px; }
+  .tag { font-size: .78rem; font-weight: 700; border-radius: 3px; padding: 1px 6px; height: fit-content;
+         text-align: center; }
+  .tag.code { background: #fff; color: var(--blue-dark); }
+  .tag.model { background: var(--amber); color: #3b2a00; }
+  .tag.none { background: transparent; }
+  @media (prefers-reduced-motion: no-preference) {
+    .trace li.new { animation: lit .9s ease-out; }
+    @keyframes lit { from { background: rgba(255,235,59,.35); } to { background: transparent; } }
+  }
+
+  ul.plain { list-style: none; margin: 0; padding: 0; }
+  ul.plain li { padding: 8px 0; border-top: 1px solid var(--line); font-size: .94rem; }
+  ul.plain li:first-child { border-top: 0; }
+  .muted { color: var(--ink-2); }
+  .sms { background: #f3f5f6; border-radius: 10px; padding: 8px 10px; margin-top: 2px; }
+  fieldset { border: 0; padding: 0; margin: 0 0 12px; }
+  legend { font-weight: 700; margin-bottom: 6px; }
+  .radio { display: flex; gap: 6px; align-items: center; margin: 3px 0; }
+</style>
 </head>
-
 <body>
-    <svg class="bg-cross" viewBox="0 0 100 100" aria-hidden="true">
-        <path d="M42 0h16v42h42v16H58v42H42V58H0V42h42z" fill="#DD5410" />
-    </svg>
+<header>
+  <div class="bar">
+    <div class="brand">CareRoute <small>UK demo</small></div>
+    <div class="who">
+      <label for="user">Signed in as</label>
+      <select id="user"></select>
+    </div>
+  </div>
+</header>
+<div class="notice"><p><strong>This is a demonstration, not an NHS service.</strong>
+  Every person, practice, clinic, waiting time and price here is fictional. In an emergency, call 999.</p></div>
 
-    <main class="page">
-        <div class="brand">
-            <svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
-                <defs>
-                    <linearGradient id="og" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0" stop-color="#F2731B" />
-                        <stop offset="1" stop-color="#DD5410" />
-                    </linearGradient>
-                </defs>
-                <rect width="48" height="48" rx="14" fill="url(#og)" />
-                <path d="M21 11h6v10h10v6H27v10h-6V27H11v-6h10z" fill="#fff" />
-            </svg>
-            <span class="brand-name">CareRoute</span>
+<main>
+  <section aria-labelledby="title">
+    <h1 id="title">Get care at the right place</h1>
+    <p class="lede">Describe what's wrong, for you or someone you care for. CareRoute finds the right
+      service and books it once you confirm.</p>
+
+    <div class="convo">
+      <div class="msgs" id="msgs" aria-live="polite"></div>
+      <form class="composer" id="composer">
+        <label for="text">What's the problem?</label>
+        <p class="hint" id="forhint">Say who it's for if it isn't you, for example "Arjun has earache".</p>
+        <textarea id="text" aria-describedby="forhint"></textarea>
+        <div class="row">
+          <div class="grow">
+            <label for="where">Search near a postcode (optional; otherwise their home address)</label>
+            <input type="text" id="where" autocomplete="postal-code">
+          </div>
+          <button class="btn secondary" id="send" type="submit">Send</button>
+          <button class="link" type="button" id="newchat">Start a new conversation</button>
         </div>
+      </form>
+    </div>
+  </section>
 
-        <h1>Find care near you, fast.</h1>
-        <p class="sub">Tell us what you're feeling. We'll find the nearest provider who can help.</p>
+  <aside>
+    <section class="panel trace" aria-labelledby="trace-h">
+      <h2 id="trace-h">How this was decided</h2>
+      <p>Each step as it runs. Safety, permission, money and bookings are always decided by code.</p>
+      <ol id="trace"></ol>
+    </section>
 
-        <section class="panel">
-            <label class="field-label" for="symptoms">What's going on?</label>
-            <textarea id="symptoms"
-                placeholder="e.g. chest tightness and shortness of breath since this morning"></textarea>
-            <p class="kbd-hint">Press <kbd>Enter</kbd> to send &middot; <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new
-                line</p>
+    <section class="panel" aria-labelledby="inbox-h">
+      <h2 id="inbox-h">Referrals to choose</h2>
+      <ul class="plain" id="inbox"><li class="muted">Nothing waiting.</li></ul>
+    </section>
 
+    <section class="panel" aria-labelledby="book-h">
+      <h2 id="book-h">Bookings</h2>
+      <ul class="plain" id="bookings"><li class="muted">No bookings yet.</li></ul>
+    </section>
 
-            <div class="controls">
-                <button id="go">Find care</button>
-                <span class="loc" id="locStatus" data-state="off">Location not shared</span>
-            </div>
+    <section class="panel" aria-labelledby="sms-h">
+      <h2 id="sms-h">Texts sent</h2>
+      <p>What patients receive. No health details are ever included.</p>
+      <ul class="plain" id="outbox"><li class="muted">No texts yet.</li></ul>
+    </section>
 
-            <details class="opt-details">
-                <summary>Add your name &amp; medication history <span class="opt">(optional)</span></summary>
-                <div class="opt-body">
-                    <label class="field-label sm" for="pname">Your name</label>
-                    <input class="text-field" id="pname" placeholder="e.g. Ramesh Kumar">
-                    <label class="field-label sm" for="pmeds" style="margin-top:12px">Current medications or
-                        history</label>
-                    <textarea id="pmeds" style="min-height:64px"
-                        placeholder="e.g. on blood thinners; type 2 diabetes"></textarea>
-                </div>
-            </details>
+    <section class="panel" aria-labelledby="demo-h">
+      <h2 id="demo-h">Demo controls</h2>
+      <fieldset>
+        <legend>Next booking attempt</legend>
+        <label class="radio"><input type="radio" name="fault" value="" checked> Works normally</label>
+        <label class="radio"><input type="radio" name="fault" value="conflict"> Time is taken by someone else</label>
+        <label class="radio"><input type="radio" name="fault" value="error"> Booking system is down</label>
+      </fieldset>
+      <fieldset>
+        <legend>A referral arrives from e-RS</legend>
+        <div class="row" style="margin-top:0">
+          <select id="ubrn" class="grow" aria-label="Referral">
+            <option value="000100020003">Tom: orthopaedics (NHS)</option>
+            <option value="000100020004">Margaret: ophthalmology (NHS)</option>
+            <option value="PRV-2026-0007">Tom: dermatology (private, insured)</option>
+          </select>
+          <button class="btn secondary" type="button" id="sendref">Send referral</button>
+        </div>
+      </fieldset>
+      <fieldset id="gpref-box" hidden>
+        <legend>The GP reviews the request and refers</legend>
+        <div class="row" style="margin-top:0">
+          <select id="specialty" class="grow" aria-label="Specialty">
+            <option value="trauma_orthopaedics">Trauma and orthopaedics</option>
+            <option value="dermatology">Dermatology</option>
+            <option value="cardiology">Cardiology</option>
+            <option value="gastroenterology">Gastroenterology</option>
+            <option value="ophthalmology">Ophthalmology</option>
+          </select>
+          <button class="btn secondary" type="button" id="gpref">GP refers</button>
+        </div>
+      </fieldset>
+    </section>
+  </aside>
+</main>
 
+<script>
+const MODEL_STEPS = new Set(["assess", "route_agent", "extract_preferences"]);
+const $ = (id) => document.getElementById(id);
+const state = { user: "", thread: null, turn: 0, busy: false };
+const WHEN = {weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit"};
 
-            <div class="answer is-empty" id="answer">Your nearest providers will show up here.</div>
-        </section>
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+}
+function headers() {
+  const h = {"Content-Type": "application/json"};
+  if (state.user) h["X-Demo-User"] = state.user;
+  return h;
+}
+async function api(path, opts = {}) {
+  const r = await fetch(path, {...opts, headers: {...headers(), ...(opts.headers || {})}});
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || `Request failed (${r.status})`);
+  return body;
+}
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function button(text, cls, onClick) {
+  const b = el("button", cls, text);
+  b.type = "button";
+  b.addEventListener("click", onClick);
+  return b;
+}
 
-        <p class="note">
-            <strong>This is a demo of an AI agent pattern</strong> — a synthetic patient (you), your real
-            location, and real providers from OpenStreetMap. It is not a medical service and can't give
-            medical advice. If this is an emergency, call your local emergency number.
-        </p>
-    </main>
+// ---------- conversation ----------
+function addMsg(role, text, kind = "") {
+  const empty = $("msgs").querySelector(".empty");
+  if (empty) empty.remove();
+  const div = el("div", `msg ${role} ${kind}`, text);
+  $("msgs").appendChild(div);
+  div.scrollIntoView({block: "nearest"});
+  return div;
+}
+function showEmpty() {
+  const examples = ["I've had burning when I pee since yesterday",
+                    "Arjun has had earache since last night",
+                    "My knee has been sore for months",
+                    "My friend Sam has a bad back, can you book physio for him",
+                    "Crushing chest pain and I'm sweating"];
+  $("msgs").innerHTML = "";
+  const box = el("div", "empty");
+  box.appendChild(el("p", "", "Try one of these, or write your own:"));
+  const ul = el("ul");
+  examples.forEach(e => {
+    const li = el("li");
+    li.appendChild(button(e, "", () => { $("text").value = e; $("text").focus(); }));
+    ul.appendChild(li);
+  });
+  box.appendChild(ul);
+  $("msgs").appendChild(box);
+}
+const kindFor = (outcome) => ({emergency: "emergency", urgent: "urgent", booked: "booked"}[outcome] || "");
 
-    <script>
-        const $ = id => document.getElementById(id);
-        const answerEl = $("answer");
+// ---------- trace ----------
+function traceTurn(label) {
+  state.turn += 1;
+  $("trace").appendChild(el("li", "turn", label));
+}
+function traceStep(ev) {
+  const li = el("li", ev.type === "step" ? "new" : "sub new");
+  if (ev.type === "step") {
+    const model = MODEL_STEPS.has(ev.node);
+    li.append(el("span", `tag ${model ? "model" : "code"}`, model ? "Model" : "Code"), el("span", "", ev.label));
+  } else {
+    li.append(el("span", "tag none"), el("span", "", ev.text));
+  }
+  $("trace").appendChild(li);
+  li.scrollIntoView({block: "nearest"});
+}
 
-        // Escape HTML so nothing in a model/tool response can inject markup.
-        function escapeHtml(s) {
-            return s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-        }
+// ---------- streaming ----------
+async function stream(path, body) {
+  state.busy = true; $("send").disabled = true;
+  try {
+    const r = await fetch(path + "?stream=1", {method: "POST", headers: headers(), body: JSON.stringify(body)});
+    if (!r.ok || !(r.headers.get("content-type") || "").includes("event-stream")) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.detail || `Request failed (${r.status})`);
+    }
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "", result = null;
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream: true});
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 2);
+        if (!line.startsWith("data: ")) continue;
+        const ev = JSON.parse(line.slice(6));
+        if (ev.type === "result") result = ev;
+        else if (ev.type === "error") throw new Error(ev.detail);
+        else traceStep(ev);
+      }
+    }
+    if (result) handleResult(result);
+  } catch (e) {
+    addMsg("bot", e.message, "error");
+  } finally {
+    state.busy = false; $("send").disabled = false;
+    refreshSide();
+  }
+}
+function handleResult(r) {
+  state.thread = r.thread_id;
+  if (r.answer) addMsg("bot", r.answer, kindFor(r.outcome));
+  if (r.pending) renderPending(r.pending);
+  $("gpref-box").hidden = !(r.booking && r.booking.kind === "gp");
+}
 
-        // Tiny, safe Markdown renderer for the small subset the model emits:
-        // **bold**, *italic*, `code`. HTML is escaped FIRST, so model output can
-        // never inject tags; line breaks stay handled by white-space: pre-wrap.
-        function renderMarkdown(md) {
-            return escapeHtml(md)
-                // Markdown headings (#, ##, ### ...) -> a bold line, so a stray
-                // "###" never shows as literal text in the chat bubble.
-                .replace(/^#{1,6}\s+(.+)$/gm, "<strong>$1</strong>")
-                .replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
-                .replace(/(^|[^*])\*(?!\s)([^*\n]+?)\*/g, "$1<em>$2</em>")
-                .replace(/`([^`]+?)`/g, "<code>$1</code>");
-        }
+// ---------- pending cards: where the patient decides ----------
+function card(title) {
+  const c = el("div", "card");
+  c.appendChild(el("h3", "", title));
+  $("msgs").appendChild(c);
+  c.scrollIntoView({block: "nearest"});
+  return c;
+}
+function resume(value, cardEl) {
+  if (cardEl) cardEl.querySelectorAll("button,input").forEach(b => b.disabled = true);
+  traceTurn("Your answer");
+  stream("/chat/resume", {thread_id: state.thread, resume: value});
+}
+const money = (gbp) => gbp && gbp !== "0.00" ? "£" + gbp.replace(/\.00$/, "") : "Nothing";
 
-        function setAnswer(state, text, isMarkdown) {
-            answerEl.className = "answer " + state;
-            if (text === undefined) return;
-            if (isMarkdown) answerEl.innerHTML = renderMarkdown(text);
-            else answerEl.textContent = text;
-        }
-
-        function setLoc(kind, text) {
-            const s = $("locStatus");
-            s.dataset.state = kind;
-            s.textContent = text;
-        }
-
-        // The browser's position, if the user allows it. Kept in a variable now
-        // that there are no lat/lng boxes on the page.
-        let gps = null;
-
-        function tryGeolocate() {
-            if (!navigator.geolocation) { setLoc("off", "Location not available \u2014 mention your area in your message"); return; }
-            setLoc("wait", "Finding your location\u2026");
-            navigator.geolocation.getCurrentPosition(
-                pos => {
-                    gps = { lat: +pos.coords.latitude.toFixed(5), lng: +pos.coords.longitude.toFixed(5) };
-                    setLoc("ok", "Using your location");
-                },
-                () => {
-                    setLoc("off", "Location off \u2014 mention your area in your message");
-                    const box = $("symptoms");
-                    if (!sessionId) box.placeholder = "e.g. knee pain since two days \u2014 I'm in HSR Layout, Bengaluru";
-                }
-            );
-        }
-        tryGeolocate();
-
-        // Show where the server actually searched, so the user can catch a
-        // wrong match. Also updates when the user moves the search in chat
-        // ("actually I'm in Whitefield").
-        function showSearchedPlace(loc) {
-            if (!loc) return;
-            let text = "Near: " + loc.label;
-            if (loc.broad) text += " \u2014 add your area for closer results";
-            else if (loc.approximate) text += " (couldn't find the exact spot)";
-            setLoc("ok", text);
-        }
-
-
-        // --- Multi-turn conversation state -----------------------------------
-        // sessionId is null until the first answer; after that every submit is a
-        // follow-up in the SAME conversation, so the agent remembers earlier
-        // symptoms and any meds/history you add later.
-        let sessionId = null;
-        const goBtn = $("go");
-
-        // "Start over" control, built in JS so the page markup stays untouched.
-        const resetBtn = document.createElement("button");
-        resetBtn.type = "button";
-        resetBtn.textContent = "Start over";
-        resetBtn.style.cssText = "margin-left:12px;background:none;border:none;" +
-            "color:#c2410c;cursor:pointer;font:inherit;text-decoration:underline;display:none;";
-        resetBtn.addEventListener("click", () => {
-            sessionId = null;
-            goBtn.textContent = "Find care";
-            resetBtn.style.display = "none";
-            $("symptoms").value = "";
-            $("symptoms").placeholder = "";
-            setAnswer("", "");
-            $("symptoms").focus();
+function renderPending(p) {
+  if (p.type === "choose_option") {
+    const c = card(p.near_miss ? "Nothing fits every limit. Which would you accept?" : "Choose where to go");
+    p.options.forEach(o => {
+      const meta = (o.why && o.why.length ? o.why
+        : [o.hours, o.walk_in && !o.bookable ? "walk in, no appointment" : ""]).filter(Boolean);
+      const b = button("", "opt", () => resume({option_id: o.option_id}, c));
+      b.append(el("b", "", o.name), el("span", "meta", meta.join("; ")));
+      if (o.breaks && o.breaks.length) {
+        b.appendChild(el("br"));
+        b.appendChild(el("span", "bends", "Bends your limit: " + o.breaks.map(x => x.text).join("; ")));
+      }
+      c.appendChild(b);
+    });
+    c.appendChild(button("Don't book anything", "link", () => resume({decline: true}, c)));
+  } else if (p.type === "confirm_booking") {
+    const o = p.option;
+    const verb = {book: "Confirm booking", send_request: "Send request", self_refer: "Send self-referral"}[p.action];
+    const c = card(p.action === "book" ? "Check and confirm" : verb);
+    const forWho = p.for.relationship === "self" ? `${p.for.first_name} (you)`
+      : `${p.for.first_name} (your ${p.for.relationship}; ${p.for.authority})`;
+    const dl = el("dl", "facts");
+    [["For", forWho], ["Where", o.name + (o.address ? `, ${o.address}` : "")],
+     ["You pay", money(p.patient_pays_gbp) + (p.funding && p.funding !== "NHS" ? ` (${p.funding})` : "")],
+     ["Shared", p.shares]].forEach(([k, v]) => dl.append(el("dt", "", k), el("dd", "", v)));
+    c.appendChild(dl);
+    let chosen = null;
+    const go = button(verb, "btn", () => resume({consent: true, slot_id: chosen}, c));
+    if (p.action === "book") {
+      go.disabled = true;
+      const slots = el("div", "slots");
+      slots.setAttribute("role", "group"); slots.setAttribute("aria-label", "Available times");
+      p.slots.forEach(s => {
+        const b = button(new Date(s.start).toLocaleString("en-GB", WHEN), "slot", () => {
+          slots.querySelectorAll(".slot").forEach(x => x.setAttribute("aria-pressed", "false"));
+          b.setAttribute("aria-pressed", "true"); chosen = s.slot_id; go.disabled = false;
         });
-        goBtn.insertAdjacentElement("afterend", resetBtn);
+        b.setAttribute("aria-pressed", "false");
+        slots.appendChild(b);
+      });
+      c.appendChild(slots);
+    }
+    const acts = el("div", "actions");
+    acts.append(go, button("Cancel", "link", () => resume({consent: false}, c)));
+    c.appendChild(acts);
+  } else if (p.type === "preferences") {
+    const r = p.referral;
+    const c = card(`Choose where ${r.for} is seen: ${r.specialty}`);
+    c.appendChild(el("p", "hint", "Say what matters in one go. Nothing is booked until you confirm."));
+    const input = el("input"); input.type = "text"; input.setAttribute("aria-label", "What matters to you");
+    const chips = el("div", "chips");
+    p.examples.forEach(e => chips.appendChild(button(e, "chip", () => { input.value = e; input.focus(); })));
+    const go = button("Find options", "btn secondary", () => {
+      if (!input.value.trim()) { input.focus(); return; }
+      addMsg("user", input.value); resume({text: input.value}, c);
+    });
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") go.click(); });
+    const acts = el("div", "actions"); acts.appendChild(go);
+    c.append(input, chips, acts);
+  }
+}
 
-        // Enter sends; Shift+Enter makes a new line (the usual chat convention).
-        // Exceptions: while typing with an input method (Hindi, Kannada, etc.)
-        // Enter confirms the word, and on phones/tablets there's no Shift key,
-        // so Enter keeps adding a new line and the button sends.
-        const touchOnly = window.matchMedia("(pointer: coarse)").matches;
-        function sendFromKeyboard(e) {
-            if (e.key !== "Enter" || e.shiftKey || e.isComposing || e.keyCode === 229) return;
-            if (touchOnly && e.target.tagName === "TEXTAREA") return;
-            e.preventDefault();
-            if (!goBtn.disabled) goBtn.click();
-        }
-        $("symptoms").addEventListener("keydown", sendFromKeyboard);
+// ---------- side panels ----------
+function fill(list, items, emptyText) {
+  list.innerHTML = "";
+  if (!items.length) { list.appendChild(el("li", "muted", emptyText)); return; }
+  items.forEach(i => list.appendChild(i));
+}
+async function refreshSide() {
+  try {
+    const out = (await api("/demo/outbox")).messages.slice(0, 6).map(m => {
+      const li = el("li");
+      li.append(el("span", "muted", `To ${m.to}`), el("div", "sms", m.text));
+      return li;
+    });
+    fill($("outbox"), out, "No texts yet.");
+  } catch (e) { /* demo tools off */ }
+  if (!state.user) {
+    fill($("inbox"), [], "Sign in to see referrals.");
+    fill($("bookings"), [], "Sign in to see bookings.");
+    return;
+  }
+  try {
+    const threads = (await api("/inbox")).threads.map(x => {
+      const li = el("li");
+      const status = x.outcome === "booked" ? "booked" : x.waiting_for ? "waiting for you" : (x.outcome || "");
+      li.append(el("b", "", x.for), document.createTextNode(`: ${x.specialty} `),
+                el("span", "muted", `(${status})`), el("br"),
+                button("Open", "link", () => openThread(x.thread_id)));
+      return li;
+    });
+    fill($("inbox"), threads, "Nothing waiting.");
+    const bk = (await api("/bookings")).bookings.slice(-6).reverse().map(b => {
+      const li = el("li");
+      const when = b.start ? new Date(b.start).toLocaleString("en-GB", WHEN) : "request sent";
+      li.append(el("b", "", b.provider_name), el("br"),
+                el("span", "muted", `${b.for_first_name}; ${when}; ref ${b.booking_ref}`));
+      return li;
+    });
+    fill($("bookings"), bk, "No bookings yet.");
+  } catch (e) { /* ignore */ }
+}
+async function openThread(id) {
+  try {
+    const v = await api(`/chat/${encodeURIComponent(id)}`);
+    state.thread = id;
+    $("msgs").innerHTML = "";
+    v.messages.forEach(m => addMsg(m.role === "user" ? "user" : "bot", m.text,
+                                   m.role === "user" ? "" : kindFor(v.outcome)));
+    if (v.pending) renderPending(v.pending);
+    traceTurn(`Opened referral for ${v.for}`);
+  } catch (e) { addMsg("bot", e.message, "error"); }
+}
 
-        $("go").addEventListener("click", async () => {
-            const symptoms = $("symptoms").value.trim();
-            const name = $("pname").value.trim();
-            const meds = $("pmeds").value.trim();
+// ---------- consent links: /consent/{token} ----------
+async function consentPage(token) {
+  $("msgs").innerHTML = "";
+  if (!state.user) { addMsg("bot", "Sign in (top right) as the person being asked, to review this request."); return; }
+  try {
+    const inv = await api(`/consents/${encodeURIComponent(token)}`);
+    const c = card(`${inv.requester_first_name} is asking to act for you`);
+    if (inv.is_requester) { c.appendChild(el("p", "", `You created this link. Send it to ${inv.label} to approve.`)); return; }
+    const dl = el("dl", "facts");
+    dl.append(el("dt", "", "Allows"), el("dd", "", inv.scope), el("dt", "", "Status"), el("dd", "", inv.status));
+    c.append(dl, el("p", "hint", "You'll get a text if they book, and it appears in your record of who acted for you."));
+    if (inv.status !== "pending") return;
+    const acts = el("div", "actions");
+    acts.append(
+      button("Approve", "btn", async () => {
+        try { await api(`/consents/${token}/approve`, {method: "POST"}); acts.remove();
+          addMsg("bot", `Approved. ${inv.requester_first_name} can make one booking for you in the next 24 hours.`, "booked"); }
+        catch (e) { addMsg("bot", e.message, "error"); }
+      }),
+      button("Decline", "link", async () => {
+        try { await api(`/consents/${token}/decline`, {method: "POST"}); acts.remove();
+          addMsg("bot", "Declined. Nobody can act for you with this link."); }
+        catch (e) { addMsg("bot", e.message, "error"); }
+      }));
+    c.appendChild(acts);
+  } catch (e) { addMsg("bot", e.message, "error"); }
+}
 
-            if (!symptoms) {
-                setAnswer("is-error", "Add a couple of symptoms first.");
-                $("symptoms").focus();
-                return;
-            }
-            // GPS goes with the FIRST message only. Without it, the agent reads
-            // the place from the message itself (or asks). Any later change of
-            // location happens in the chat ("I'm in Whitefield now"), and
-            // follow-ups never resend GPS, so they can't undo that change.
-            const body = { message: symptoms, name, meds, session_id: sessionId };
-            if (!sessionId && gps) { body.lat = gps.lat; body.lng = gps.lng; }
+// ---------- wiring ----------
+function resetConversation() {
+  state.thread = null; state.turn = 0; $("trace").innerHTML = ""; $("gpref-box").hidden = true;
+}
+$("composer").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const text = $("text").value.trim();
+  if (!text || state.busy) return;
+  addMsg("user", text);
+  traceTurn(`Message ${state.turn + 1}`);
+  const where = $("where").value.trim();
+  $("text").value = "";
+  stream("/chat", {message: text, thread_id: state.thread, location_text: where || null});
+});
+$("text").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("composer").requestSubmit(); }
+});
+$("newchat").addEventListener("click", () => {
+  resetConversation();
+  if (location.pathname !== "/") history.pushState({}, "", "/");
+  showEmpty(); $("text").focus();
+});
+$("user").addEventListener("change", () => {
+  state.user = $("user").value; resetConversation();
+  const m = location.pathname.match(/^\/consent\/([^/]+)/);
+  if (m) consentPage(m[1]); else showEmpty();
+  refreshSide();
+});
+document.querySelectorAll("input[name=fault]").forEach(r => r.addEventListener("change", async () => {
+  try { await api("/demo/faults", {method: "POST", body: JSON.stringify({next_booking: r.value || null})}); }
+  catch (e) { addMsg("bot", e.message, "error"); }
+}));
+$("sendref").addEventListener("click", async () => {
+  try {
+    const t = await api(`/demo/referral/${encodeURIComponent($("ubrn").value)}`, {method: "POST"});
+    traceTurn("Referral received from e-RS");
+    await refreshSide();
+    if (state.user) await openThread(t.thread_id);
+  } catch (e) { addMsg("bot", e.message, "error"); }
+});
+$("gpref").addEventListener("click", async () => {
+  try {
+    const t = await api("/demo/gp-outcome", {method: "POST",
+      body: JSON.stringify({thread_id: state.thread, specialty: $("specialty").value})});
+    traceTurn("GP referred through e-RS (same episode)");
+    await refreshSide();
+    await openThread(t.thread_id);
+  } catch (e) { addMsg("bot", e.message, "error"); }
+});
 
-            $("go").disabled = true;
-            setAnswer("is-loading");
-            answerEl.innerHTML =
-                '<span class="dots"><i></i><i></i><i></i></span>' +
-                '<span>Reading your symptoms and checking nearby providers\u2026</span>';
-
-            try {
-                // Optional private-beta gate (see note above). Leave "" for open.
-                const API_KEY = "";
-                const res = await fetch("/chat", {
-                    method: "POST",
-                    headers: API_KEY
-                        ? { "Content-Type": "application/json", "X-API-Key": API_KEY }
-                        : { "Content-Type": "application/json" },
-                    // message = this turn's text; session_id threads the conversation
-                    // (null on turn 1) so the agent remembers earlier turns.
-                    body: JSON.stringify(body)
-                });
-                if (!res.ok) {
-                    // 400/409/422/503 from our server carry a message written for
-                    // the user (e.g. "We couldn't find ...", "Still working on your
-                    // previous message", or the outage note that points to 112),
-                    // so show it as-is.
-                    let detail = "";
-                    if ([400, 409, 422, 503].includes(res.status)) {
-                        const d = await res.json().catch(() => ({}));
-                        if (typeof d.detail === "string") detail = d.detail;
-                    }
-                    const msg = detail ? detail : res.status === 429
-                        ? "You're going a bit fast \u2014 wait a few seconds and try again."
-                        : res.status === 401
-                            ? "This endpoint needs an access key."
-                            : res.status === 503
-                                ? "We're at capacity right now \u2014 please try again later."
-                                : "Something went wrong \u2014 please try again.";
-                    setAnswer("is-error", msg);
-                    return;
-                }
-                const data = await res.json();
-                sessionId = data.session_id || sessionId;   // remember the thread
-                showSearchedPlace(data.location);
-                const answer = (data.answer || "").trim();
-                if (answer) {
-                    setAnswer("is-results", answer, true);
-                    // Switch into follow-up mode: the same conversation continues.
-                    goBtn.textContent = "Send follow-up";
-                    resetBtn.style.display = "inline";
-                    $("symptoms").value = "";
-                    $("symptoms").placeholder = "Add more details, meds, or a follow-up\u2026";
-                    $("symptoms").focus();
-                } else {
-                    setAnswer("is-empty", "No answer came back. Try rephrasing.");
-                }
-            } catch (e) {
-                setAnswer("is-error", "We couldn't reach the server \u2014 it may still be starting up. Give it a moment and try again.");
-            } finally {
-                $("go").disabled = false;
-            }
-        });
-    </script>
+(async function init() {
+  const sel = $("user");
+  sel.innerHTML = "";
+  sel.appendChild(new Option("Not signed in", ""));
+  try {
+    const d = await api("/demo/users");
+    d.users.forEach(u => sel.appendChild(new Option(
+      `${u.name}, ${u.age}` + (u.can_act_for.length ? ` (acts for ${u.can_act_for.join(", ")})` : ""),
+      u.nhs_number)));
+    if (d.users[0]) sel.value = d.users[0].nhs_number;
+  } catch (e) {
+    sel.innerHTML = "";
+    sel.appendChild(new Option("Sign in with NHS login", ""));
+  }
+  state.user = sel.value;
+  const m = location.pathname.match(/^\/consent\/([^/]+)/);
+  if (m) consentPage(m[1]); else showEmpty();
+  refreshSide();
+})();
+</script>
 </body>
-
 </html>

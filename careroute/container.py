@@ -63,7 +63,13 @@ class Container:
 
     def describe(self) -> str:
         s = self.settings
-        return (f"[careroute] backend: {self.directory.backend_name}"
+        uk = (f"[careroute-uk] llm: {s.llm_mode} | NHS login: {s.nhs_login_mode} | "
+              f"sms: {'GOV.UK Notify' if s.notify_api_key else 'demo outbox'} | "
+              f"demo tools: {'on' if s.demo_tools else 'off'}\n")
+        if s.nhs_login_mode == "demo":
+            uk += ("[careroute-uk] WARNING: demo login accepts any demo NHS number in a "
+                   "header. Never expose this mode with real data.\n")
+        return uk + (f"[careroute] legacy backend: {self.directory.backend_name}"
                 f" (osm source: {s.osm_source}) | sessions/patients/rate-limits: "
                 f"{'redis' if s.use_redis else 'memory (single replica only)'} | "
                 f"checkpoints: {'postgres' if s.use_postgres else 'memory (single replica only)'}"
@@ -220,6 +226,140 @@ class Container:
     @cached_property
     def chat_service(self) -> ChatService:
         return ChatService(**self._service_args(), sessions=self.sessions)
+
+    # --- UK CareRoute ----------------------------------------------------------
+    @cached_property
+    def uk_clock(self):
+        from careroute.uk.clock import Clock
+        return Clock()
+
+    @cached_property
+    def uk_store(self):
+        from careroute.uk.store import MemoryJourneyStore, RedisJourneyStore
+        return RedisJourneyStore(self.redis) if self.redis else MemoryJourneyStore()
+
+    @cached_property
+    def uk_records(self):
+        from careroute.uk.records import NhsRecords
+        return NhsRecords.from_dir(self.settings.data_dir, self.uk_clock)
+
+    @cached_property
+    def uk_geocoder(self):
+        from careroute.uk.geo import UkGeocoder
+        from careroute.uk.integrations import load_json
+        s = self.settings
+        return UkGeocoder(self.geocoder, offline_postcodes=load_json(s.data_dir, "postcodes.json"),
+                          postcodes_io_url=s.postcodes_io_url, client=self.http,
+                          use_network=s.uk_geocode_network)
+
+    @cached_property
+    def uk_distances(self):
+        from careroute.uk.geo import DistanceService
+        return DistanceService(self.router)
+
+    @cached_property
+    def uk_directory(self):
+        from careroute.uk.directory import UkServiceDirectory
+        return UkServiceDirectory.from_dir(self.settings.data_dir, self.uk_distances)
+
+    @cached_property
+    def uk_consents(self):
+        from careroute.uk.authority import ConsentService
+        return ConsentService(self.uk_store, self.uk_clock)
+
+    @cached_property
+    def uk_authority(self):
+        from careroute.uk.authority import AuthorityService
+        return AuthorityService(self.uk_records, self.uk_consents)
+
+    @cached_property
+    def uk_identity(self):
+        from careroute.uk.identity import DemoIdentity, NhsLoginIdentity
+        s = self.settings
+        if s.nhs_login_mode == "oidc":
+            return NhsLoginIdentity(s.nhs_login_issuer, s.nhs_login_client_id, client=self.http)
+        return DemoIdentity(self.uk_records)
+
+    @cached_property
+    def uk_booking_core(self):
+        from careroute.uk.integrations import DemoBookingCore
+        return DemoBookingCore(self.uk_store, self.uk_clock)
+
+    @cached_property
+    def uk_ers(self):
+        from careroute.uk.integrations import DemoErs, load_json
+        return DemoErs(load_json(self.settings.data_dir, "ers.json"), self.uk_booking_core)
+
+    @cached_property
+    def uk_private(self) -> dict:
+        from careroute.uk.integrations import load_json
+        return load_json(self.settings.data_dir, "private.json")
+
+    @cached_property
+    def uk_notifier(self):
+        from careroute.uk.integrations import DemoOutbox, GovUkNotify
+        s = self.settings
+        if s.notify_api_key:
+            return GovUkNotify(s.notify_api_key, s.notify_sms_template_id, self.uk_store,
+                               client=self.http)
+        return DemoOutbox(self.uk_store, self.uk_clock)
+
+    @cached_property
+    def uk_steps(self):
+        from careroute.uk.llm import OfflineSteps, OpenAiSteps
+        s = self.settings
+        if s.llm_mode == "offline":
+            return OfflineSteps()
+        from langchain_openai import ChatOpenAI
+        main = ChatOpenAI(model=s.openai_model, timeout=s.llm_timeout_s,
+                          max_retries=s.llm_max_retries, temperature=0)
+        small = ChatOpenAI(model=s.extraction_model, timeout=s.llm_timeout_s,
+                           max_retries=s.llm_max_retries, temperature=0)
+        return OpenAiSteps(main, small)
+
+    @cached_property
+    def uk_route_toolkit(self):
+        from careroute.uk.route_agent import RouteToolkit
+        return RouteToolkit(self.uk_directory, self.uk_records, self.uk_geocoder)
+
+    @cached_property
+    def uk_route_model(self):
+        s = self.settings
+        if s.llm_mode == "offline":
+            from careroute.uk.offline_model import OfflineRouteModel
+            return OfflineRouteModel()
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(model=s.openai_model, timeout=s.llm_timeout_s,
+                          max_retries=s.llm_max_retries, temperature=0).bind_tools(
+            self.uk_route_toolkit.tools)
+
+    @cached_property
+    def uk_route_agent(self):
+        from careroute.uk.route_agent import RouteAgent
+        return RouteAgent(self.uk_route_model, self.uk_route_toolkit,
+                          max_llm_calls=self.settings.route_max_llm_calls)
+
+    @cached_property
+    def journey(self):
+        from careroute.uk.graph import JourneyDeps, JourneyGraph
+        from careroute.uk.integrations import (DemoGpSystem, DemoInsurer, DemoPayments,
+                                               DemoProviderBooking)
+        core = self.uk_booking_core
+        return JourneyGraph(JourneyDeps(
+            records=self.uk_records, directory=self.uk_directory, distances=self.uk_distances,
+            authority=self.uk_authority, consents=self.uk_consents, steps=self.uk_steps,
+            route_agent=self.uk_route_agent, ers=self.uk_ers, gp=DemoGpSystem(core),
+            booking=DemoProviderBooking(core), insurer=DemoInsurer(self.uk_private, core),
+            payments=DemoPayments(core), notifier=self.uk_notifier, store=self.uk_store,
+            clock=self.uk_clock, private_providers=self.uk_private["providers"],
+            public_base_url=self.settings.public_base_url))
+
+    @cached_property
+    def journey_service(self):
+        from careroute.uk.service import JourneyService
+        return JourneyService(self.journey, self.checkpointers, store=self.uk_store,
+                              authority=self.uk_authority, sessions=self.sessions,
+                              geocoder=self.uk_geocoder, ers=self.uk_ers, log=True)
 
     # --- lifecycle -----------------------------------------------------------
     async def aclose(self) -> None:

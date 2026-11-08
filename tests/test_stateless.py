@@ -39,7 +39,7 @@ pytestmark = pytest.mark.skipif(not (REDIS_URL and DATABASE_URL),
 
 
 def chat(port, ip, **body):
-    return httpx.post(f"http://127.0.0.1:{port}/chat", json=body, timeout=30,
+    return httpx.post(f"http://127.0.0.1:{port}/legacy/chat", json=body, timeout=30,
                       headers={"X-Forwarded-For": ip})
 
 

@@ -1,0 +1,151 @@
+{
+  "patients": [
+    {
+      "nhs_number": "9990010102",
+      "name": "Priya Shah",
+      "dob": "1991-03-12",
+      "sex": "F",
+      "postcode": "LS6 3HN",
+      "lat": 53.8215,
+      "lng": -1.577,
+      "area": "Headingley",
+      "phone": "07700 900123",
+      "practice_ods": "ZGP01",
+      "insurance": null,
+      "linked_profiles": [
+        {
+          "nhs_number": "9990010218",
+          "relationship": "child"
+        },
+        {
+          "nhs_number": "9990010307",
+          "relationship": "child"
+        }
+      ]
+    },
+    {
+      "nhs_number": "9990010218",
+      "name": "Arjun Shah",
+      "dob": "2019-05-02",
+      "sex": "M",
+      "postcode": "LS6 3HN",
+      "lat": 53.8215,
+      "lng": -1.577,
+      "area": "Headingley",
+      "phone": null,
+      "practice_ods": "ZGP01",
+      "insurance": null,
+      "linked_profiles": []
+    },
+    {
+      "nhs_number": "9990010307",
+      "name": "Maya Shah",
+      "dob": "2011-01-20",
+      "sex": "F",
+      "postcode": "LS6 3HN",
+      "lat": 53.8215,
+      "lng": -1.577,
+      "area": "Headingley",
+      "phone": "07700 900124",
+      "practice_ods": "ZGP01",
+      "insurance": null,
+      "linked_profiles": []
+    },
+    {
+      "nhs_number": "9990010404",
+      "name": "Tom Walker",
+      "dob": "1984-08-09",
+      "sex": "M",
+      "postcode": "LS7 4AB",
+      "lat": 53.8296,
+      "lng": -1.5384,
+      "area": "Chapel Allerton",
+      "phone": "07700 900456",
+      "practice_ods": "ZGP02",
+      "insurance": {
+        "insurer": "NMH",
+        "policy_number": "NMH-448812"
+      },
+      "linked_profiles": [
+        {
+          "nhs_number": "9990010501",
+          "relationship": "parent"
+        }
+      ]
+    },
+    {
+      "nhs_number": "9990010501",
+      "name": "Margaret Walker",
+      "dob": "1948-02-14",
+      "sex": "F",
+      "postcode": "LS8 2LJ",
+      "lat": 53.8347,
+      "lng": -1.5021,
+      "area": "Roundhay",
+      "phone": "07700 900457",
+      "practice_ods": "ZGP03",
+      "insurance": null,
+      "linked_profiles": []
+    },
+    {
+      "nhs_number": "9990010609",
+      "name": "Sam Okafor",
+      "dob": "1997-11-30",
+      "sex": "M",
+      "postcode": "LS2 7EY",
+      "lat": 53.8031,
+      "lng": -1.5479,
+      "area": "Leeds city centre",
+      "phone": "07700 900789",
+      "practice_ods": "ZGP04",
+      "insurance": null,
+      "linked_profiles": []
+    }
+  ],
+  "practices": [
+    {
+      "id": "gp:ZGP01",
+      "ods": "ZGP01",
+      "name": "Larchfield Surgery",
+      "address": "12 Larchfield Road, Headingley, Leeds",
+      "postcode": "LS6 3HN",
+      "lat": 53.8209,
+      "lng": -1.5762,
+      "mode": "online_consultation",
+      "online_consultation": "Practice online consultation form (total triage)"
+    },
+    {
+      "id": "gp:ZGP02",
+      "ods": "ZGP02",
+      "name": "Brookside Health Centre",
+      "address": "3 Brookside Parade, Chapel Allerton, Leeds",
+      "postcode": "LS7 3PD",
+      "lat": 53.8287,
+      "lng": -1.5396,
+      "mode": "appointments",
+      "online_consultation": "Practice online consultation form"
+    },
+    {
+      "id": "gp:ZGP03",
+      "ods": "ZGP03",
+      "name": "Elmtree Practice",
+      "address": "88 Elmtree Lane, Roundhay, Leeds",
+      "postcode": "LS8 2LJ",
+      "lat": 53.8352,
+      "lng": -1.5008,
+      "mode": "appointments",
+      "online_consultation": "Practice online consultation form"
+    },
+    {
+      "id": "gp:ZGP04",
+      "ods": "ZGP04",
+      "name": "Ashgrove Medical Centre",
+      "address": "40 Ashgrove, Woodhouse, Leeds",
+      "postcode": "LS2 9JT",
+      "lat": 53.8105,
+      "lng": -1.5545,
+      "mode": "online_consultation",
+      "online_consultation": "Practice online consultation form (total triage)"
+    }
+  ]
+}

@@ -2,8 +2,8 @@
 api/errors.py — dependency outages become "try again shortly" (503), not 500.
 
 A 500 says "our code is broken"; these are "a dependency is briefly down", and
-every one of them tells the user to call 112 if it's an emergency, because the
-person reading the error may be in one.
+every one of them tells the user to call 999 if it's an emergency (and 111
+otherwise), because the person reading the error may be in one.
 
   Redis down          sessions / patient records unavailable
   Postgres down       conversation history unavailable
@@ -19,11 +19,12 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
-STORE_DOWN = {"detail": "CareRoute is briefly unavailable. Please try again "
-                        "in a moment, and if this is an emergency call 112 now."}
-LLM_DOWN = {"detail": "CareRoute's assistant is not responding right now. Please "
-                      "try again in a moment, and if this is an emergency call "
-                      "112 (ambulance: 108) now."}
+STORE_DOWN = {"detail": "CareRoute is briefly unavailable. Please try again in a "
+                        "moment. If this is an emergency, call 999 now. For urgent "
+                        "help, call NHS 111 or go to 111.nhs.uk."}
+LLM_DOWN = {"detail": "CareRoute's assistant is not responding right now. Please try "
+                      "again in a moment. If this is an emergency, call 999 now. For "
+                      "urgent help, call NHS 111 or go to 111.nhs.uk."}
 
 
 def register_error_handlers(app: FastAPI, *, use_redis: bool, use_postgres: bool) -> None:

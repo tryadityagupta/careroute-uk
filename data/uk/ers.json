@@ -1,0 +1,211 @@
+{
+  "specialties": {
+    "trauma_orthopaedics": "Trauma and orthopaedics",
+    "ophthalmology": "Ophthalmology",
+    "dermatology": "Dermatology",
+    "cardiology": "Cardiology",
+    "gastroenterology": "Gastroenterology"
+  },
+  "services": [
+    {
+      "id": "ers:S1001",
+      "service_id": "S1001",
+      "name": "Aire Valley General Hospital, Orthopaedics",
+      "specialty": "trauma_orthopaedics",
+      "lat": 53.8018,
+      "lng": -1.5527,
+      "postcode": "LS1 3EX",
+      "wait_weeks": 18,
+      "independent_sector": false,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S1002",
+      "service_id": "S1002",
+      "name": "Northgate Orthopaedic Centre (independent sector, NHS-funded)",
+      "specialty": "trauma_orthopaedics",
+      "lat": 53.8712,
+      "lng": -1.6897,
+      "postcode": "LS19 7XB",
+      "wait_weeks": 5,
+      "independent_sector": true,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S1003",
+      "service_id": "S1003",
+      "name": "Calderbrook Royal Infirmary, Orthopaedics",
+      "specialty": "trauma_orthopaedics",
+      "lat": 53.6904,
+      "lng": -1.4926,
+      "postcode": "WF1 4DG",
+      "wait_weeks": 9,
+      "independent_sector": false,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S1004",
+      "service_id": "S1004",
+      "name": "Wharfe Valley Hospital, Orthopaedics",
+      "specialty": "trauma_orthopaedics",
+      "lat": 53.9068,
+      "lng": -1.6922,
+      "postcode": "LS21 2LY",
+      "wait_weeks": 12,
+      "independent_sector": false,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S1005",
+      "service_id": "S1005",
+      "name": "Kirkstall Treatment Centre (independent sector, NHS-funded)",
+      "specialty": "trauma_orthopaedics",
+      "lat": 53.816,
+      "lng": -1.604,
+      "postcode": "LS5 3BT",
+      "wait_weeks": 7,
+      "independent_sector": true,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S2001",
+      "service_id": "S2001",
+      "name": "Aire Valley General Hospital, Eye Clinic",
+      "specialty": "ophthalmology",
+      "lat": 53.8018,
+      "lng": -1.5527,
+      "postcode": "LS1 3EX",
+      "wait_weeks": 22,
+      "independent_sector": false,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S2002",
+      "service_id": "S2002",
+      "name": "Moorside Eye Unit (independent sector, NHS-funded)",
+      "specialty": "ophthalmology",
+      "lat": 53.744,
+      "lng": -1.6,
+      "postcode": "LS27 9BE",
+      "wait_weeks": 6,
+      "independent_sector": true,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S2003",
+      "service_id": "S2003",
+      "name": "Wharfe Valley Hospital, Eye Clinic",
+      "specialty": "ophthalmology",
+      "lat": 53.9068,
+      "lng": -1.6922,
+      "postcode": "LS21 2LY",
+      "wait_weeks": 8,
+      "independent_sector": false,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S3001",
+      "service_id": "S3001",
+      "name": "Aire Valley General Hospital, Dermatology",
+      "specialty": "dermatology",
+      "lat": 53.8018,
+      "lng": -1.5527,
+      "postcode": "LS1 3EX",
+      "wait_weeks": 30,
+      "independent_sector": false,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S3002",
+      "service_id": "S3002",
+      "name": "Pennine Skin Clinic (independent sector, NHS-funded)",
+      "specialty": "dermatology",
+      "lat": 53.6458,
+      "lng": -1.785,
+      "postcode": "HD1 2QF",
+      "wait_weeks": 12,
+      "independent_sector": true,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S4001",
+      "service_id": "S4001",
+      "name": "Aire Valley General Hospital, Cardiology",
+      "specialty": "cardiology",
+      "lat": 53.8018,
+      "lng": -1.5527,
+      "postcode": "LS1 3EX",
+      "wait_weeks": 14,
+      "independent_sector": false,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S4002",
+      "service_id": "S4002",
+      "name": "Calderbrook Royal Infirmary, Cardiology",
+      "specialty": "cardiology",
+      "lat": 53.6904,
+      "lng": -1.4926,
+      "postcode": "WF1 4DG",
+      "wait_weeks": 7,
+      "independent_sector": false,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S5001",
+      "service_id": "S5001",
+      "name": "Aire Valley General Hospital, Gastroenterology",
+      "specialty": "gastroenterology",
+      "lat": 53.8018,
+      "lng": -1.5527,
+      "postcode": "LS1 3EX",
+      "wait_weeks": 16,
+      "independent_sector": false,
+      "funding": "NHS"
+    },
+    {
+      "id": "ers:S5002",
+      "service_id": "S5002",
+      "name": "Calderbrook Royal Infirmary, Gastroenterology",
+      "specialty": "gastroenterology",
+      "lat": 53.6904,
+      "lng": -1.4926,
+      "postcode": "WF1 4DG",
+      "wait_weeks": 10,
+      "independent_sector": false,
+      "funding": "NHS"
+    }
+  ],
+  "referrals": [
+    {
+      "ubrn": "000100020003",
+      "nhs_number": "9990010404",
+      "specialty": "trauma_orthopaedics",
+      "priority": "routine",
+      "source": "nhs_ers",
+      "referrer_ods": "ZGP02",
+      "reason": "Knee pain, referred for orthopaedic assessment",
+      "episode_id": null
+    },
+    {
+      "ubrn": "000100020004",
+      "nhs_number": "9990010501",
+      "specialty": "ophthalmology",
+      "priority": "routine",
+      "source": "nhs_ers",
+      "referrer_ods": "ZGP03",
+      "reason": "Cataract assessment",
+      "episode_id": null
+    },
+    {
+      "ubrn": "PRV-2026-0007",
+      "nhs_number": "9990010404",
+      "specialty": "dermatology",
+      "priority": "routine",
+      "source": "private",
+      "referrer_ods": "ZGP02",
+      "reason": "Open referral letter: skin lesion review",
+      "episode_id": null
+    }
+  ]
+}

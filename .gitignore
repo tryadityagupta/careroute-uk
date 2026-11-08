@@ -13,3 +13,6 @@ data/osm/
 
 agent.py
 mocktest.py
+
+.pytest_cache/
+docker-compose.override.yml

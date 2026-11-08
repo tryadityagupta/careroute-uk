@@ -1,4 +1,4 @@
-name: Deploy CareRoute to Azure
+name: UK CareRoute: test, then deploy to Azure
 
 on:
   push:
@@ -9,11 +9,15 @@ permissions:
   id-token: write         # lets the job get the OIDC token for Azure login
   contents: read
 
+# Tests always run. Build + deploy only run when the repository variable
+# DEPLOY_ENABLED is "true" (Settings > Secrets and variables > Actions >
+# Variables) AND the three AZURE_* secrets exist. A fresh copy of this repo
+# therefore goes green on tests instead of failing at the Azure login.
 env:
-  RESOURCE_GROUP: careroute-rg
-  ACR_NAME: carerouteacr
-  CONTAINER_APP: careroute-app
-  IMAGE_NAME: careroute
+  RESOURCE_GROUP: careroute-uk-rg
+  ACR_NAME: carerouteukacr
+  CONTAINER_APP: careroute-uk-app
+  IMAGE_NAME: careroute-uk
 
 jobs:
   build-and-deploy:
@@ -62,6 +66,7 @@ jobs:
         run: python -m pytest -rs
 
       - name: Log in to Azure
+        if: ${{ vars.DEPLOY_ENABLED == 'true' }}
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -69,9 +74,11 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Get the real registry login server
+        if: ${{ vars.DEPLOY_ENABLED == 'true' }}
         run: echo "ACR_LOGIN_SERVER=$(az acr show --name ${{ env.ACR_NAME }} --query loginServer -o tsv)" >> "$GITHUB_ENV"
 
       - name: Build the image in ACR, tagged with this commit
+        if: ${{ vars.DEPLOY_ENABLED == 'true' }}
         run: |
           az acr build \
             --registry ${{ env.ACR_NAME }} \
@@ -80,6 +87,7 @@ jobs:
             .
 
       - name: Deploy the new image to Container Apps
+        if: ${{ vars.DEPLOY_ENABLED == 'true' }}
         run: |
           az extension add --name containerapp --upgrade
           az containerapp update \
@@ -89,6 +97,7 @@ jobs:
             --set-env-vars GIT_SHA=${{ github.sha }}
 
       - name: Smoke test the live app
+        if: ${{ vars.DEPLOY_ENABLED == 'true' }}
         run: |
           FQDN=$(az containerapp show -n ${{ env.CONTAINER_APP }} -g ${{ env.RESOURCE_GROUP }} \
             --query properties.configuration.ingress.fqdn -o tsv)
@@ -109,23 +118,19 @@ jobs:
             echo "Smoke test FAILED: /version never reported ${{ github.sha }}"; exit 1
           fi
 
-          # 2) /care must return an answer. The FIRST call after a fresh deploy is
-          #    slow: cold container + uncached Overpass/OSRM + several LLM calls can
-          #    exceed a minute. Allow a generous per-try timeout and retry — the
-          #    first try warms the OSM cache (the server finishes and caches even if
-          #    curl gives up), so a later try is fast. || true keeps a timeout from
-          #    tripping `set -e` before we can check the result.
+          # 2) The emergency path must answer: rules only, no model, no login,
+          #    so this is fast and deterministic even on a cold container.
           CARE_OK=""
           for i in 1 2 3; do
-            RESP=$(curl -fsS --max-time 90 -X POST "https://$FQDN/care" \
+            RESP=$(curl -fsS --max-time 30 -X POST "https://$FQDN/chat" \
               -H "Content-Type: application/json" \
-              -d '{"symptoms":"itchy fingers","lat":12.9719,"lng":77.6412}' || true)
-            if echo "$RESP" | grep -qi '"answer"'; then
+              -d '{"message":"crushing chest pain and sweating"}' || true)
+            if echo "$RESP" | grep -q '"outcome":"emergency"'; then
               echo "$RESP"; CARE_OK=1; break
             fi
-            echo "care attempt $i returned no answer yet, retrying..."; sleep 5
+            echo "chat attempt $i returned no emergency answer yet, retrying..."; sleep 5
           done
           if [ -z "$CARE_OK" ]; then
-            echo "Smoke test FAILED: /care returned no answer after retries"; exit 1
+            echo "Smoke test FAILED: /chat did not answer the emergency path"; exit 1
           fi
           echo "Smoke test passed."

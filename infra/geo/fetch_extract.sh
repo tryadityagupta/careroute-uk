@@ -1,26 +1,22 @@
 #!/usr/bin/env bash
-# infra/geo/fetch_extract.sh — download OSM data for Karnataka from Geofabrik.
+# infra/geo/fetch_extract.sh — download the OSM extract for the demo region.
 #
 #   docker compose --profile geo-setup run --rm geo-fetch
 #
-# Geofabrik has no per-state file for Indian states; the smallest region that
-# covers Karnataka is "southern-zone" (~550 MB: KA, KL, TN, AP, TS, PY, LD).
-# We download it once, verify the checksum, and clip it to a Karnataka bounding
-# box with osmium. Everything downstream (PostGIS, OSRM, Nominatim) then
-# processes one state instead of five, which is what keeps OSRM's preprocessing
-# comfortable on a laptop.
-#
-# The box deliberately spills a little into Goa, Kerala, Tamil Nadu, Andhra and
-# Maharashtra: a user near a state border should still see the hospital just
-# across it.
+# Default: West Yorkshire from Geofabrik (~60 MB), which covers every demo
+# service in data/uk (Leeds, Otley, Pudsey, Morley, Wakefield, Huddersfield).
+# Point REGION_URL at another Geofabrik extract for a different area, and set
+# BBOX (min_lon,min_lat,max_lon,max_lat) to clip it; with no BBOX the whole
+# extract is used. Everything downstream (PostGIS, OSRM, Nominatim) reads
+# /data/osm/region.osm.pbf.
 set -euo pipefail
 
 OUT_DIR="${OUT_DIR:-/data/osm}"
-REGION_URL="${REGION_URL:-https://download.geofabrik.de/asia/india/southern-zone-latest.osm.pbf}"
+REGION_URL="${REGION_URL:-https://download.geofabrik.de/europe/united-kingdom/england/west-yorkshire-latest.osm.pbf}"
 # min_lon,min_lat,max_lon,max_lat
-BBOX="${BBOX:-74.0,11.5,78.6,18.5}"
-SRC="$OUT_DIR/southern-zone.osm.pbf"
-DST="$OUT_DIR/karnataka.osm.pbf"
+BBOX="${BBOX:-}"
+SRC="$OUT_DIR/source.osm.pbf"
+DST="$OUT_DIR/region.osm.pbf"
 
 mkdir -p "$OUT_DIR"
 cd "$OUT_DIR"
@@ -43,11 +39,16 @@ fi
 osmium fileinfo -g header.option.osmosis_replication_timestamp "$SRC" \
     > "${DST%.osm.pbf}.extract_date" 2>/dev/null || echo unknown > "${DST%.osm.pbf}.extract_date"
 
-echo "[geo-fetch] clipping to bbox $BBOX"
-# complete_ways: a road crossing the box edge is kept whole, so OSRM doesn't
-# get dangling half-roads at the border.
-osmium extract --bbox "$BBOX" --strategy complete_ways --overwrite \
-    -o "$DST" "$SRC"
+if [ -n "$BBOX" ]; then
+    echo "[geo-fetch] clipping to bbox $BBOX"
+    # complete_ways: a road crossing the box edge is kept whole, so OSRM doesn't
+    # get dangling half-roads at the border.
+    osmium extract --bbox "$BBOX" --strategy complete_ways --overwrite \
+        -o "$DST" "$SRC"
+else
+    echo "[geo-fetch] no BBOX: using the whole extract"
+    cp "$SRC" "$DST"
+fi
 
 ls -lh "$SRC" "$DST"
 echo "[geo-fetch] done: $DST (data as of $(cat "${DST%.osm.pbf}.extract_date"))"

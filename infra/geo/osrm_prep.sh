@@ -9,7 +9,7 @@
 # The car profile matches what careroute/maps/routing.py asks for (/table/v1/driving).
 set -eu
 
-PBF="${PBF:-/data/osm/karnataka.osm.pbf}"
+PBF="${PBF:-/data/osm/region.osm.pbf}"
 BASE="${PBF%.osm.pbf}.osrm"
 
 [ -f "$PBF" ] || { echo "missing $PBF; run geo-fetch first" >&2; exit 1; }

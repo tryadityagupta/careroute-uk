@@ -1,0 +1,85 @@
+{
+  "providers": [
+    {
+      "id": "prv:ZPR01",
+      "name": "Headrow Consulting Rooms, Dermatology",
+      "specialty": "dermatology",
+      "lat": 53.8004,
+      "lng": -1.5451,
+      "postcode": "LS1 6PU",
+      "price_gbp": "180.00",
+      "wait_weeks": 2,
+      "networks": [
+        "NMH"
+      ]
+    },
+    {
+      "id": "prv:ZPR02",
+      "name": "Roundhay Private Clinic, Dermatology",
+      "specialty": "dermatology",
+      "lat": 53.8361,
+      "lng": -1.5019,
+      "postcode": "LS8 1AA",
+      "price_gbp": "220.00",
+      "wait_weeks": 1,
+      "networks": [
+        "NMH"
+      ]
+    },
+    {
+      "id": "prv:ZPR03",
+      "name": "Harewood Skin and Laser Clinic",
+      "specialty": "dermatology",
+      "lat": 53.8978,
+      "lng": -1.5132,
+      "postcode": "LS17 9LF",
+      "price_gbp": "250.00",
+      "wait_weeks": 1,
+      "networks": []
+    },
+    {
+      "id": "prv:ZPR04",
+      "name": "Headrow Consulting Rooms, Orthopaedics",
+      "specialty": "trauma_orthopaedics",
+      "lat": 53.8004,
+      "lng": -1.5451,
+      "postcode": "LS1 6PU",
+      "price_gbp": "240.00",
+      "wait_weeks": 1,
+      "networks": [
+        "NMH"
+      ]
+    },
+    {
+      "id": "prv:ZPR05",
+      "name": "Linton Private Hospital, Orthopaedics",
+      "specialty": "trauma_orthopaedics",
+      "lat": 53.9283,
+      "lng": -1.3874,
+      "postcode": "LS22 6AA",
+      "price_gbp": "200.00",
+      "wait_weeks": 2,
+      "networks": [
+        "NMH"
+      ]
+    }
+  ],
+  "insurers": {
+    "NMH": {
+      "name": "Northern Mutual Health",
+      "policies": {
+        "NMH-448812": {
+          "holder": "9990010404",
+          "status": "active",
+          "covered_specialties": [
+            "dermatology",
+            "trauma_orthopaedics"
+          ],
+          "outpatient_cover": "full",
+          "excess_remaining_gbp": "100.00",
+          "needs_preauth": true
+        }
+      }
+    }
+  }
+}

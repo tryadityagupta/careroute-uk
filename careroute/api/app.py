@@ -25,8 +25,9 @@ from careroute.api.errors import register_error_handlers
 from careroute.api.schemas import CareRequest, ChatRequest
 from careroute.container import Container
 from careroute.maps.postgis import GeoUnavailable
+from careroute.uk.api import build_router
 
-CODE_VERSION = "2026-10-async"
+CODE_VERSION = "2026-10-uk"
 
 
 def create_app(container: Container | None = None) -> FastAPI:
@@ -39,13 +40,13 @@ def create_app(container: Container | None = None) -> FastAPI:
         # Build the sync, CPU/file-bound parts (seed data, provider directory)
         # BEFORE the first request, so a bad config fails at boot and the
         # first user doesn't pay for loading the JSON.
-        _ = (c.patients, c.directory)
+        _ = (c.patients, c.directory, c.uk_records, c.uk_directory, c.journey)
         yield
         # Graceful shutdown: close the HTTP client and the Redis/Postgres pools
         # on the loop that opened them.
         await c.aclose()
 
-    app = FastAPI(title="CareRoute", lifespan=lifespan)
+    app = FastAPI(title="UK CareRoute", lifespan=lifespan)
     app.state.container = c
     # Lock to your real origin(s) in production via CAREROUTE_ALLOWED_ORIGINS.
     app.add_middleware(CORSMiddleware, allow_origins=list(s.allowed_origins),
@@ -59,14 +60,27 @@ def create_app(container: Container | None = None) -> FastAPI:
     async def home():
         return FileResponse(s.web_dir / "index.html")
 
+    @app.get("/consent/{token}")
+    async def consent_page(token: str):
+        return FileResponse(s.web_dir / "index.html")     # the page reads the token
+
+    # UK CareRoute: /chat, /chat/resume, /referrals/events, /me, /inbox, ...
+    app.include_router(build_router(c, guards))
+
+    # --- Legacy single-agent CareRoute (the original India build) ---------
+    # Kept working under /legacy: same engine the UK route agent grew from.
+    @app.get("/legacy")
+    async def legacy_home():
+        return FileResponse(s.web_dir / "legacy.html")
+
     # async def: FastAPI runs these ON the event loop. (A plain def would run
     # each request on a 40-thread pool, which capped a replica at ~40
     # concurrent turns no matter how idle its CPU was.)
-    @app.post("/care", dependencies=guards)
+    @app.post("/legacy/care", dependencies=guards)
     async def care(req: CareRequest):
         return await c.care_service.handle(req)
 
-    @app.post("/chat", dependencies=guards)
+    @app.post("/legacy/chat", dependencies=guards)
     async def chat(req: ChatRequest):
         return await c.chat_service.handle(req)
 
@@ -107,6 +121,7 @@ def create_app(container: Container | None = None) -> FastAPI:
     @app.get("/version")
     async def version():
         return {"version": CODE_VERSION, "commit": s.git_sha,
-                "backend": c.directory.backend_name}
+                "backend": c.directory.backend_name, "llm": s.llm_mode,
+                "nhs_login": s.nhs_login_mode}
 
     return app

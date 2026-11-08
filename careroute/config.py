@@ -57,7 +57,7 @@ class Settings:
     osrm_base_url: str = PUBLIC_OSRM
     osrm_timeout_s: float = 3.0
     nominatim_url: str = PUBLIC_NOMINATIM
-    geocode_countries: str = "in"
+    geocode_countries: str = "gb"
 
     # --- Shared state (stateless replicas) ----------------------------------
     redis_url: str = ""
@@ -95,6 +95,24 @@ class Settings:
 
     git_sha: str = "local-dev"
 
+    # --- UK CareRoute ---------------------------------------------------------
+    # "openai": gpt-4o-mini for triage, subject, preferences and the route
+    # agent. "offline": deterministic rules and a scripted route model (no key,
+    # no network) — the demo still runs end to end.
+    llm_mode: str = "openai"
+    extraction_model: str = "gpt-4o-mini"
+    route_max_llm_calls: int = 6
+    nhs_login_mode: str = "demo"           # "demo" | "oidc"
+    nhs_login_issuer: str = "https://auth.sandpit.signin.nhs.uk"
+    nhs_login_client_id: str = ""
+    demo_tools: bool = True                # /demo/* routes and the demo user picker
+    referral_event_key: str = ""           # shared secret for POST /referrals/events
+    public_base_url: str = "http://localhost:8000"
+    postcodes_io_url: str = "https://api.postcodes.io"
+    uk_geocode_network: bool = True        # False: offline demo postcodes only
+    notify_api_key: str = ""               # GOV.UK Notify; empty = demo outbox
+    notify_sms_template_id: str = ""
+
     # --- Derived -------------------------------------------------------------
     @property
     def use_redis(self) -> bool:
@@ -124,6 +142,14 @@ class Settings:
             raise RuntimeError(
                 "CAREROUTE_REQUIRE_SHARED_STATE=1 but " + " and ".join(missing)
                 + " not set. Refusing to start in single-replica memory mode.")
+        if self.llm_mode not in ("openai", "offline"):
+            raise ValueError(f"CAREROUTE_LLM must be 'openai' or 'offline', got {self.llm_mode!r}")
+        if self.nhs_login_mode not in ("demo", "oidc"):
+            raise ValueError(f"NHS_LOGIN_MODE must be 'demo' or 'oidc', got {self.nhs_login_mode!r}")
+        if self.nhs_login_mode == "oidc" and not self.nhs_login_client_id:
+            raise RuntimeError("NHS_LOGIN_MODE=oidc needs NHS_LOGIN_CLIENT_ID.")
+        if self.notify_api_key and not self.notify_sms_template_id:
+            raise RuntimeError("GOVUK_NOTIFY_API_KEY is set but GOVUK_NOTIFY_SMS_TEMPLATE_ID is not.")
         if self.osm_source not in ("overpass", "postgis"):
             raise ValueError(f"OSM_SOURCE must be 'overpass' or 'postgis', "
                              f"got {self.osm_source!r}")
@@ -153,7 +179,7 @@ class Settings:
             osrm_base_url=(env("OSRM_BASE_URL") or PUBLIC_OSRM).rstrip("/"),
             osrm_timeout_s=float(env("OSRM_TIMEOUT_S", "3")),
             nominatim_url=(env("NOMINATIM_URL") or PUBLIC_NOMINATIM).rstrip("/"),
-            geocode_countries=env("CAREROUTE_GEOCODE_COUNTRIES", "in").strip(),
+            geocode_countries=env("CAREROUTE_GEOCODE_COUNTRIES", "gb").strip(),
             redis_url=env("REDIS_URL", "").strip(),
             database_url=env("DATABASE_URL", "").strip(),
             geo_database_url=env("GEO_DATABASE_URL", "").strip(),
@@ -180,4 +206,21 @@ class Settings:
             blob_container=env("BLOB_CONTAINER", "patient-data"),
             data_dir=Path(env("DATA_DIR") or PROJECT_ROOT / "data"),
             git_sha=env("GIT_SHA", "local-dev"),
+            # Unset CAREROUTE_LLM: use OpenAI when a key is present, else offline.
+            llm_mode=(env("CAREROUTE_LLM") or ("openai" if (env("OPENAI_API_KEY") or "").strip()
+                                               else "offline")).strip().lower(),
+            extraction_model=env("CAREROUTE_EXTRACTION_MODEL", "gpt-4o-mini"),
+            route_max_llm_calls=int(env("CAREROUTE_ROUTE_MAX_LLM_CALLS", "6")),
+            nhs_login_mode=env("NHS_LOGIN_MODE", "demo").strip().lower(),
+            nhs_login_issuer=(env("NHS_LOGIN_ISSUER") or
+                              "https://auth.sandpit.signin.nhs.uk").rstrip("/"),
+            nhs_login_client_id=env("NHS_LOGIN_CLIENT_ID", "").strip(),
+            demo_tools=_flag(env("CAREROUTE_DEMO_TOOLS"), True),
+            referral_event_key=env("CAREROUTE_REFERRAL_EVENT_KEY", "").strip(),
+            public_base_url=(env("CAREROUTE_PUBLIC_BASE_URL") or
+                             "http://localhost:8000").rstrip("/"),
+            postcodes_io_url=(env("POSTCODES_IO_URL") or "https://api.postcodes.io").rstrip("/"),
+            uk_geocode_network=_flag(env("CAREROUTE_UK_GEOCODE_NETWORK"), True),
+            notify_api_key=env("GOVUK_NOTIFY_API_KEY", "").strip(),
+            notify_sms_template_id=env("GOVUK_NOTIFY_SMS_TEMPLATE_ID", "").strip(),
         )

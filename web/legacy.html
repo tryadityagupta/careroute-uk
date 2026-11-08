@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CareRoute — find nearby care</title>
+
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><rect width='48' height='48' rx='12' fill='%23DD5410'/><path d='M21,11h6v10h10v6H27v10h-6V27H11v-6h10z' fill='%23fff'/></svg>">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Hanken+Grotesk:wght@400;500;600&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #FFFBF8;
+            --panel: #FFFFFF;
+            --field: #FFF8F3;
+            --ink: #2A1E17;
+            --muted: #7C6A5E;
+            --muted-2: #C9B7AC;
+            --line: #F0DED2;
+            --orange: #DD5410;
+            --orange-2: #F2731B;
+            --orange-deep: #B84309;
+            --tint: #FFF0E6;
+            --shadow: 0 12px 34px rgba(221, 84, 16, .10), 0 2px 6px rgba(42, 30, 23, .05);
+            --font-display: "Bricolage Grotesque", "Hanken Grotesk", system-ui, sans-serif;
+            --font-body: "Hanken Grotesk", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            -webkit-text-size-adjust: 100%;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: var(--font-body);
+            color: var(--ink);
+            background: var(--bg);
+            line-height: 1.5;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--orange-2), var(--orange));
+            z-index: 3;
+        }
+
+        .bg-cross {
+            position: absolute;
+            top: -70px;
+            right: -70px;
+            width: 320px;
+            height: 320px;
+            opacity: .05;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .page {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 40px 20px 56px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 44px;
+        }
+
+        .mark {
+            width: 42px;
+            height: 42px;
+            flex: none;
+            filter: drop-shadow(0 4px 10px rgba(221, 84, 16, .28));
+        }
+
+        .brand-name {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: 1.25rem;
+            letter-spacing: -0.01em;
+        }
+
+        h1 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            font-size: clamp(1.9rem, 6vw, 2.6rem);
+            line-height: 1.08;
+            letter-spacing: -0.02em;
+            margin: 0 0 12px;
+        }
+
+        .sub {
+            color: var(--muted);
+            font-size: 1.02rem;
+            max-width: 46ch;
+            margin: 0 0 28px;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 18px;
+            padding: 22px;
+            box-shadow: var(--shadow);
+        }
+
+        .field-label {
+            display: block;
+            font-weight: 600;
+            font-size: 0.98rem;
+            margin-bottom: 8px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 104px;
+            resize: vertical;
+            font: inherit;
+            color: var(--ink);
+            background: var(--field);
+            border: 1.5px solid var(--line);
+            border-radius: 10px;
+            padding: 13px 14px;
+            transition: border-color .15s ease, box-shadow .15s ease;
+        }
+
+        textarea::placeholder {
+            color: var(--muted-2);
+        }
+
+        .text-field {
+            width: 100%;
+            font: inherit;
+            color: var(--ink);
+            background: var(--field);
+            border: 1.5px solid var(--line);
+            border-radius: 10px;
+            padding: 11px 14px;
+        }
+
+        .text-field::placeholder {
+            color: var(--muted-2);
+        }
+
+        .text-field:focus-visible {
+            outline: none;
+            border-color: var(--orange);
+            box-shadow: 0 0 0 4px rgba(221, 84, 16, .14);
+        }
+
+        .opt {
+            color: var(--muted-2);
+            font-weight: 400;
+        }
+
+        .field-label.sm {
+            font-size: 0.88rem;
+            font-weight: 500;
+            color: var(--muted);
+        }
+
+        .opt-details {
+            margin-top: 16px;
+            padding-top: 6px;
+            border-top: 1px dashed var(--line);
+        }
+
+        .opt-details>summary {
+            cursor: pointer;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            padding: 6px 0;
+            font-size: 0.9rem;
+            color: var(--muted);
+            user-select: none;
+        }
+
+        .opt-details>summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .opt-details>summary::before {
+            content: "+";
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            flex: none;
+            border: 1.5px solid var(--muted-2);
+            border-radius: 6px;
+            font-weight: 600;
+            line-height: 1;
+        }
+
+        .opt-details[open]>summary::before {
+            content: "\2212";
+        }
+
+        .opt-details>summary:hover {
+            color: var(--ink);
+        }
+
+        .opt-body {
+            margin-top: 10px;
+        }
+
+        textarea:focus-visible {
+            outline: none;
+            border-color: var(--orange);
+            box-shadow: 0 0 0 4px rgba(221, 84, 16, .14);
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+
+        button#go {
+            font: inherit;
+            font-weight: 600;
+            font-size: 1rem;
+            color: #fff;
+            background: var(--orange);
+            border: 0;
+            border-radius: 10px;
+            padding: 12px 22px;
+            cursor: pointer;
+            transition: background .15s ease, transform .05s ease;
+        }
+
+        button#go:hover {
+            background: var(--orange-deep);
+        }
+
+        button#go:active {
+            transform: translateY(1px);
+        }
+
+        button#go:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(221, 84, 16, .28);
+        }
+
+        button#go:disabled {
+            opacity: .55;
+            cursor: default;
+        }
+
+        .loc {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        .loc::before {
+            content: "";
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            border: 1.5px solid var(--muted-2);
+            background: transparent;
+            flex: none;
+        }
+
+        .loc[data-state="ok"] {
+            color: var(--ink);
+        }
+
+        .loc[data-state="ok"]::before {
+            background: var(--orange);
+            border-color: var(--orange);
+        }
+
+        .loc[data-state="wait"]::before {
+            background: var(--orange);
+            border-color: var(--orange);
+            animation: pulse 1.2s ease-in-out infinite;
+        }
+
+        .kbd-hint {
+            margin: 6px 2px 0;
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .kbd-hint kbd {
+            font: inherit;
+            font-size: 0.75rem;
+            padding: 1px 6px;
+            border: 1px solid var(--line);
+            border-bottom-width: 2px;
+            border-radius: 5px;
+            background: var(--field);
+        }
+
+        /* Phones and tablets have no Shift key: Enter adds a new line there and
+           the button sends, so the hint would be wrong. */
+        @media (pointer: coarse) {
+            .kbd-hint {
+                display: none;
+            }
+        }
+
+        .answer {
+            margin-top: 18px;
+            border-radius: 12px;
+            padding: 16px 18px;
+            font-size: 0.98rem;
+        }
+
+        .answer.is-empty {
+            background: var(--tint);
+            color: var(--orange-deep);
+            border: 1px dashed #F3C7AC;
+        }
+
+        .answer.is-error {
+            background: var(--tint);
+            color: var(--orange-deep);
+            border: 1px solid #F3C7AC;
+        }
+
+        .answer.is-loading {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            color: var(--muted);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .answer.is-results {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-left: 4px solid var(--orange);
+            box-shadow: var(--shadow);
+            white-space: pre-wrap;
+            line-height: 1.6;
+            color: var(--ink);
+        }
+
+        .answer.is-results code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.92em;
+            background: var(--tint);
+            padding: 1px 5px;
+            border-radius: 5px;
+        }
+
+        .dots {
+            display: inline-flex;
+            gap: 5px;
+            flex: none;
+        }
+
+        .dots i {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--orange);
+            display: inline-block;
+            animation: bounce 1s ease-in-out infinite;
+        }
+
+        .dots i:nth-child(2) {
+            animation-delay: .15s;
+        }
+
+        .dots i:nth-child(3) {
+            animation-delay: .3s;
+        }
+
+        .note {
+            margin: 22px 2px 0;
+            font-size: 0.85rem;
+            color: var(--muted);
+            line-height: 1.55;
+        }
+
+        .note strong {
+            color: var(--ink);
+            font-weight: 600;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.5);
+                opacity: .5;
+            }
+        }
+
+        @keyframes bounce {
+
+            0%,
+            100% {
+                transform: translateY(0);
+                opacity: .55;
+            }
+
+            50% {
+                transform: translateY(-5px);
+                opacity: 1;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+
+            .loc::before,
+            .dots i,
+            button#go {
+                animation: none !important;
+                transition: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <svg class="bg-cross" viewBox="0 0 100 100" aria-hidden="true">
+        <path d="M42 0h16v42h42v16H58v42H42V58H0V42h42z" fill="#DD5410" />
+    </svg>
+
+    <main class="page">
+        <div class="brand">
+            <svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
+                <defs>
+                    <linearGradient id="og" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0" stop-color="#F2731B" />
+                        <stop offset="1" stop-color="#DD5410" />
+                    </linearGradient>
+                </defs>
+                <rect width="48" height="48" rx="14" fill="url(#og)" />
+                <path d="M21 11h6v10h10v6H27v10h-6V27H11v-6h10z" fill="#fff" />
+            </svg>
+            <span class="brand-name">CareRoute</span>
+        </div>
+
+        <h1>Find care near you, fast.</h1>
+        <p class="sub">Tell us what you're feeling. We'll find the nearest provider who can help.</p>
+
+        <section class="panel">
+            <label class="field-label" for="symptoms">What's going on?</label>
+            <textarea id="symptoms"
+                placeholder="e.g. chest tightness and shortness of breath since this morning"></textarea>
+            <p class="kbd-hint">Press <kbd>Enter</kbd> to send &middot; <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new
+                line</p>
+
+
+            <div class="controls">
+                <button id="go">Find care</button>
+                <span class="loc" id="locStatus" data-state="off">Location not shared</span>
+            </div>
+
+            <details class="opt-details">
+                <summary>Add your name &amp; medication history <span class="opt">(optional)</span></summary>
+                <div class="opt-body">
+                    <label class="field-label sm" for="pname">Your name</label>
+                    <input class="text-field" id="pname" placeholder="e.g. Ramesh Kumar">
+                    <label class="field-label sm" for="pmeds" style="margin-top:12px">Current medications or
+                        history</label>
+                    <textarea id="pmeds" style="min-height:64px"
+                        placeholder="e.g. on blood thinners; type 2 diabetes"></textarea>
+                </div>
+            </details>
+
+
+            <div class="answer is-empty" id="answer">Your nearest providers will show up here.</div>
+        </section>
+
+        <p class="note">
+            <strong>This is a demo of an AI agent pattern</strong> — a synthetic patient (you), your real
+            location, and real providers from OpenStreetMap. It is not a medical service and can't give
+            medical advice. If this is an emergency, call your local emergency number.
+        </p>
+    </main>
+
+    <script>
+        const $ = id => document.getElementById(id);
+        const answerEl = $("answer");
+
+        // Escape HTML so nothing in a model/tool response can inject markup.
+        function escapeHtml(s) {
+            return s.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+        }
+
+        // Tiny, safe Markdown renderer for the small subset the model emits:
+        // **bold**, *italic*, `code`. HTML is escaped FIRST, so model output can
+        // never inject tags; line breaks stay handled by white-space: pre-wrap.
+        function renderMarkdown(md) {
+            return escapeHtml(md)
+                // Markdown headings (#, ##, ### ...) -> a bold line, so a stray
+                // "###" never shows as literal text in the chat bubble.
+                .replace(/^#{1,6}\s+(.+)$/gm, "<strong>$1</strong>")
+                .replace(/\*\*([^*]+?)\*\*/g, "<strong>$1</strong>")
+                .replace(/(^|[^*])\*(?!\s)([^*\n]+?)\*/g, "$1<em>$2</em>")
+                .replace(/`([^`]+?)`/g, "<code>$1</code>");
+        }
+
+        function setAnswer(state, text, isMarkdown) {
+            answerEl.className = "answer " + state;
+            if (text === undefined) return;
+            if (isMarkdown) answerEl.innerHTML = renderMarkdown(text);
+            else answerEl.textContent = text;
+        }
+
+        function setLoc(kind, text) {
+            const s = $("locStatus");
+            s.dataset.state = kind;
+            s.textContent = text;
+        }
+
+        // The browser's position, if the user allows it. Kept in a variable now
+        // that there are no lat/lng boxes on the page.
+        let gps = null;
+
+        function tryGeolocate() {
+            if (!navigator.geolocation) { setLoc("off", "Location not available \u2014 mention your area in your message"); return; }
+            setLoc("wait", "Finding your location\u2026");
+            navigator.geolocation.getCurrentPosition(
+                pos => {
+                    gps = { lat: +pos.coords.latitude.toFixed(5), lng: +pos.coords.longitude.toFixed(5) };
+                    setLoc("ok", "Using your location");
+                },
+                () => {
+                    setLoc("off", "Location off \u2014 mention your area in your message");
+                    const box = $("symptoms");
+                    if (!sessionId) box.placeholder = "e.g. knee pain since two days \u2014 I'm in HSR Layout, Bengaluru";
+                }
+            );
+        }
+        tryGeolocate();
+
+        // Show where the server actually searched, so the user can catch a
+        // wrong match. Also updates when the user moves the search in chat
+        // ("actually I'm in Whitefield").
+        function showSearchedPlace(loc) {
+            if (!loc) return;
+            let text = "Near: " + loc.label;
+            if (loc.broad) text += " \u2014 add your area for closer results";
+            else if (loc.approximate) text += " (couldn't find the exact spot)";
+            setLoc("ok", text);
+        }
+
+
+        // --- Multi-turn conversation state -----------------------------------
+        // sessionId is null until the first answer; after that every submit is a
+        // follow-up in the SAME conversation, so the agent remembers earlier
+        // symptoms and any meds/history you add later.
+        let sessionId = null;
+        const goBtn = $("go");
+
+        // "Start over" control, built in JS so the page markup stays untouched.
+        const resetBtn = document.createElement("button");
+        resetBtn.type = "button";
+        resetBtn.textContent = "Start over";
+        resetBtn.style.cssText = "margin-left:12px;background:none;border:none;" +
+            "color:#c2410c;cursor:pointer;font:inherit;text-decoration:underline;display:none;";
+        resetBtn.addEventListener("click", () => {
+            sessionId = null;
+            goBtn.textContent = "Find care";
+            resetBtn.style.display = "none";
+            $("symptoms").value = "";
+            $("symptoms").placeholder = "";
+            setAnswer("", "");
+            $("symptoms").focus();
+        });
+        goBtn.insertAdjacentElement("afterend", resetBtn);
+
+        // Enter sends; Shift+Enter makes a new line (the usual chat convention).
+        // Exceptions: while typing with an input method (Hindi, Kannada, etc.)
+        // Enter confirms the word, and on phones/tablets there's no Shift key,
+        // so Enter keeps adding a new line and the button sends.
+        const touchOnly = window.matchMedia("(pointer: coarse)").matches;
+        function sendFromKeyboard(e) {
+            if (e.key !== "Enter" || e.shiftKey || e.isComposing || e.keyCode === 229) return;
+            if (touchOnly && e.target.tagName === "TEXTAREA") return;
+            e.preventDefault();
+            if (!goBtn.disabled) goBtn.click();
+        }
+        $("symptoms").addEventListener("keydown", sendFromKeyboard);
+
+        $("go").addEventListener("click", async () => {
+            const symptoms = $("symptoms").value.trim();
+            const name = $("pname").value.trim();
+            const meds = $("pmeds").value.trim();
+
+            if (!symptoms) {
+                setAnswer("is-error", "Add a couple of symptoms first.");
+                $("symptoms").focus();
+                return;
+            }
+            // GPS goes with the FIRST message only. Without it, the agent reads
+            // the place from the message itself (or asks). Any later change of
+            // location happens in the chat ("I'm in Whitefield now"), and
+            // follow-ups never resend GPS, so they can't undo that change.
+            const body = { message: symptoms, name, meds, session_id: sessionId };
+            if (!sessionId && gps) { body.lat = gps.lat; body.lng = gps.lng; }
+
+            $("go").disabled = true;
+            setAnswer("is-loading");
+            answerEl.innerHTML =
+                '<span class="dots"><i></i><i></i><i></i></span>' +
+                '<span>Reading your symptoms and checking nearby providers\u2026</span>';
+
+            try {
+                // Optional private-beta gate (see note above). Leave "" for open.
+                const API_KEY = "";
+                const res = await fetch("/legacy/chat", {
+                    method: "POST",
+                    headers: API_KEY
+                        ? { "Content-Type": "application/json", "X-API-Key": API_KEY }
+                        : { "Content-Type": "application/json" },
+                    // message = this turn's text; session_id threads the conversation
+                    // (null on turn 1) so the agent remembers earlier turns.
+                    body: JSON.stringify(body)
+                });
+                if (!res.ok) {
+                    // 400/409/422/503 from our server carry a message written for
+                    // the user (e.g. "We couldn't find ...", "Still working on your
+                    // previous message", or the outage note that points to 112),
+                    // so show it as-is.
+                    let detail = "";
+                    if ([400, 409, 422, 503].includes(res.status)) {
+                        const d = await res.json().catch(() => ({}));
+                        if (typeof d.detail === "string") detail = d.detail;
+                    }
+                    const msg = detail ? detail : res.status === 429
+                        ? "You're going a bit fast \u2014 wait a few seconds and try again."
+                        : res.status === 401
+                            ? "This endpoint needs an access key."
+                            : res.status === 503
+                                ? "We're at capacity right now \u2014 please try again later."
+                                : "Something went wrong \u2014 please try again.";
+                    setAnswer("is-error", msg);
+                    return;
+                }
+                const data = await res.json();
+                sessionId = data.session_id || sessionId;   // remember the thread
+                showSearchedPlace(data.location);
+                const answer = (data.answer || "").trim();
+                if (answer) {
+                    setAnswer("is-results", answer, true);
+                    // Switch into follow-up mode: the same conversation continues.
+                    goBtn.textContent = "Send follow-up";
+                    resetBtn.style.display = "inline";
+                    $("symptoms").value = "";
+                    $("symptoms").placeholder = "Add more details, meds, or a follow-up\u2026";
+                    $("symptoms").focus();
+                } else {
+                    setAnswer("is-empty", "No answer came back. Try rephrasing.");
+                }
+            } catch (e) {
+                setAnswer("is-error", "We couldn't reach the server \u2014 it may still be starting up. Give it a moment and try again.");
+            } finally {
+                $("go").disabled = false;
+            }
+        });
+    </script>
+</body>
+
+</html>

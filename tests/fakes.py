@@ -139,10 +139,13 @@ class NoLlmSteps:
 
 def make_uk_container(route_model=None, steps=None, **settings_overrides) -> Container:
     """Offline LLM steps and route model unless replaced, no network geocoding,
-    a fixed clock. Replace parts BEFORE first use of c.journey."""
+    a fixed clock, and the DEMO directory only: tests must not depend on
+    whether data/uk/nhs/directory.json has been imported into this checkout.
+    Tests of NHS data pass their own data_dir and uk_directory.
+    Replace parts BEFORE first use of c.journey."""
     from careroute.uk.clock import FixedClock
     c = make_container(**{"llm_mode": "offline", "uk_geocode_network": False,
-                          **settings_overrides})
+                          "uk_directory": "demo", **settings_overrides})
     c.uk_clock = FixedClock(UK_NOW)
     if steps is not None:
         c.uk_steps = steps

@@ -217,7 +217,7 @@ def test_a_mode_that_needs_nhs_data_says_how_to_build_it():
 # ------------------------------------------------------------------ journeys
 @run_async
 async def test_petts_wood_finds_real_pharmacies_that_are_never_booked(tmp_path):
-    c = make_uk_container(data_dir=data_dir_with_nhs(tmp_path))
+    c = make_uk_container(data_dir=data_dir_with_nhs(tmp_path), uk_directory="auto")
     r = await uk_chat(c, PRIYA, "burning when I pee since yesterday",
                       lat=PETTS_WOOD[0], lng=PETTS_WOOD[1])
     assert r["care_route"] == "pharmacy_first"
@@ -228,7 +228,7 @@ async def test_petts_wood_finds_real_pharmacies_that_are_never_booked(tmp_path):
 
 @run_async
 async def test_leeds_still_runs_the_scripted_demo_in_mixed_mode(tmp_path):
-    c = make_uk_container(data_dir=data_dir_with_nhs(tmp_path))
+    c = make_uk_container(data_dir=data_dir_with_nhs(tmp_path), uk_directory="auto")
     r = await uk_chat(c, PRIYA, "burning when I pee since yesterday")
     ids = [o["option_id"] for o in r["pending"]["options"]]
     assert ids and all(i.startswith("pharm:ZPH") for i in ids)          # bookable demo pharmacies
@@ -303,3 +303,21 @@ def test_directory_endpoint_reports_demo_data_by_default():
     with _http(make_uk_container()) as http:
         d = http.get("/directory").json()
     assert d["mode"] == "demo" and d["counts"]["nhs"] == 0 and d["attribution"] is None
+
+
+# ------------------------------------------------------------------ the committed data file
+def test_the_committed_nhs_directory_keeps_its_promises():
+    """If data/uk/nhs/directory.json is in the repo, check what the app relies on:
+    attribution present, nothing bookable, unknowns left unknown, all in England."""
+    path = fakes.make_settings().data_dir / "uk" / "nhs" / "directory.json"
+    if not path.exists():
+        pytest.skip("no NHS directory imported in this checkout")
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    assert "Open Government Licence v3.0" in doc["meta"]["attribution"]
+    services = doc["services"]
+    assert services and len({s["id"] for s in services}) == len(services)
+    for s in services:
+        assert s["bookable"] is False and s["source"] == "nhs_open_data", s["id"]
+        assert s["hours"] is None and s["pharmacy_first"] is None and s["walk_in"] is None
+        assert 49.8 <= s["lat"] <= 55.9 and -6.5 <= s["lng"] <= 2.0, s["id"]   # England
+        assert imp.tidy_postcode(s["postcode"]) == s["postcode"], s["id"]

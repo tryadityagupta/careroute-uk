@@ -55,6 +55,7 @@
                     outline: 1px solid var(--line); }
   .msg.bot.booked { border-left: 6px solid var(--green); }
   .msg.error { color: var(--red); }
+  .notice .attribution { font-size: .85rem; color: var(--ink-2); margin-top: 4px; }
   /* The live "what I'm doing now" line: one at a time, replaced in place,
      removed when the answer arrives. Not part of the conversation. */
   .status-line { display: flex; align-items: center; gap: 10px; color: var(--ink-2);
@@ -150,7 +151,9 @@
   </div>
 </header>
 <div class="notice"><p><strong>This is a demonstration, not an NHS service.</strong>
-  Every person, practice, clinic, waiting time and price here is fictional. In an emergency, call 999.</p></div>
+  <span id="data-note">Every person, practice, clinic, waiting time and price here is fictional.</span>
+  In an emergency, call 999.</p>
+  <p class="attribution" id="attribution" hidden></p></div>
 
 <main>
   <section aria-labelledby="title">
@@ -166,7 +169,7 @@
         <textarea id="text" aria-describedby="forhint"></textarea>
         <div class="row">
           <div class="grow">
-            <label for="where">Search near a postcode (optional; otherwise their home address)</label>
+            <label for="where">Somewhere else? Postcode or town to search near (optional; otherwise their home address)</label>
             <input type="text" id="where" autocomplete="postal-code">
           </div>
           <button class="btn secondary" id="send" type="submit">Send</button>
@@ -387,8 +390,23 @@ function card(title) {
   c.scrollIntoView({block: "nearest"});
   return c;
 }
+// A card answers ONE paused question. It carries that question's id, and the
+// server refuses an answer whose id isn't the current one.
+function pendingCard(p, title) {
+  const c = card(title);
+  c.classList.add("pending");
+  if (p.interrupt_id) c.dataset.interrupt = p.interrupt_id;
+  return c;
+}
+function retireCards() {
+  document.querySelectorAll(".card.pending").forEach(c => {
+    c.classList.remove("pending");
+    c.querySelectorAll("button,input,select,textarea").forEach(b => b.disabled = true);
+  });
+}
 function resume(value, cardEl) {
-  if (cardEl) cardEl.querySelectorAll("button,input").forEach(b => b.disabled = true);
+  if (cardEl && cardEl.dataset.interrupt) value = {...value, interrupt_id: cardEl.dataset.interrupt};
+  retireCards();
   traceTurn("Your answer");
   stream("/chat/resume", {thread_id: state.thread, resume: value});
 }
@@ -396,10 +414,12 @@ const money = (gbp) => gbp && gbp !== "0.00" ? "£" + gbp.replace(/\.00$/, "") :
 
 function renderPending(p) {
   if (p.type === "choose_option") {
-    const c = card(p.near_miss ? "Nothing fits every limit. Which would you accept?" : "Choose where to go");
+    const c = pendingCard(p, p.near_miss ? "Nothing fits every limit. Which would you accept?" : "Choose where to go");
     p.options.forEach(o => {
       const meta = (o.why && o.why.length ? o.why
-        : [o.hours, o.walk_in && !o.bookable ? "walk in, no appointment" : ""]).filter(Boolean);
+        : [o.hours, o.walk_in && !o.bookable ? "walk in, no appointment" : "",
+           o.booking_mode === "contact" ? [o.address, o.postcode].filter(Boolean).join(", ") : "",
+           o.booking_mode === "contact" ? "contact them first" : ""]).filter(Boolean);
       const b = button("", "opt", () => resume({option_id: o.option_id}, c));
       b.append(el("b", "", o.name), el("span", "meta", meta.join("; ")));
       if (o.breaks && o.breaks.length) {
@@ -412,7 +432,7 @@ function renderPending(p) {
   } else if (p.type === "confirm_booking") {
     const o = p.option;
     const verb = {book: "Confirm booking", send_request: "Send request", self_refer: "Send self-referral"}[p.action];
-    const c = card(p.action === "book" ? "Check and confirm" : verb);
+    const c = pendingCard(p, p.action === "book" ? "Check and confirm" : verb);
     const forWho = p.for.relationship === "self" ? `${p.for.first_name} (you)`
       : `${p.for.first_name} (your ${p.for.relationship}; ${p.for.authority})`;
     const dl = el("dl", "facts");
@@ -441,7 +461,7 @@ function renderPending(p) {
     c.appendChild(acts);
   } else if (p.type === "preferences") {
     const r = p.referral;
-    const c = card(`Choose where ${r.for} is seen: ${r.specialty}`);
+    const c = pendingCard(p, `Choose where ${r.for} is seen: ${r.specialty}`);
     c.appendChild(el("p", "hint", "Say what matters in one go. Nothing is booked until you confirm."));
     const input = el("input"); input.type = "text"; input.setAttribute("aria-label", "What matters to you");
     const chips = el("div", "chips");
@@ -544,6 +564,7 @@ $("composer").addEventListener("submit", (e) => {
   e.preventDefault();
   const text = $("text").value.trim();
   if (!text || state.busy) return;
+  retireCards();                       // a new message replaces any open question
   addMsg("user", text);
   traceTurn(`Message ${state.turn + 1}`);
   const where = $("where").value.trim();
@@ -586,6 +607,20 @@ $("gpref").addEventListener("click", async () => {
   } catch (e) { addMsg("bot", e.message, "error"); }
 });
 
+// The notice must stay true: once real NHS pharmacies are loaded, "everything
+// is fictional" is no longer the whole story, and OGL data needs attribution.
+async function showDataNote() {
+  try {
+    const d = await api("/directory");
+    if (d.counts.nhs > 0) {
+      $("data-note").textContent = "People, GP practices, clinics, bookings, waiting times and " +
+        "prices are fictional. " + d.coverage;
+      $("attribution").textContent = d.attribution + (d.nhs_data_date ? ` (data as of ${d.nhs_data_date})` : "");
+      $("attribution").hidden = false;
+    }
+  } catch (e) { /* keep the default notice */ }
+}
+
 (async function init() {
   const sel = $("user");
   sel.innerHTML = "";
@@ -601,6 +636,7 @@ $("gpref").addEventListener("click", async () => {
     sel.appendChild(new Option("Sign in with NHS login", ""));
   }
   state.user = sel.value;
+  showDataNote();
   const m = location.pathname.match(/^\/consent\/([^/]+)/);
   if (m) consentPage(m[1]); else showEmpty();
   refreshSide();

@@ -83,15 +83,38 @@ Rules:
    For gp and self_care, provider_ids may be empty. reason_for_patient is one or
    two plain sentences to the patient about WHY this front door. Do not name
    providers, addresses, times or medicines in it: those are shown from records.
-3. If you genuinely need one more fact to choose (e.g. how long symptoms have
-   lasted), call ask_patient with ONE short question instead.
+3. Call ask_patient with ONE short question only when the answer would change
+   which front door you choose. Never ask a question because a search found
+   nothing, or to fill time.
 4. You route; you do not diagnose or prescribe.
 5. If the patient names a different place, pass near_place to the search tool.
+6. If a search finds nothing, widen radius_km once. If it still finds nothing at
+   the maximum radius, stop searching and do not ask the patient anything:
+   recommend gp only if the registered practice is a sensible place for this
+   patient to go; otherwise finish without recommending. The system then tells
+   the patient plainly that nothing was found near them.
 """
+
+
+# The radius each search tool clamps to. A search that finds nothing at its
+# maximum has truly found nothing near the patient.
+TOOL_MAX_KM = {"find_pharmacy_first": 20.0, "find_pharmacy": 20.0,
+               "find_self_referral_service": 30.0}
+
+
+def _what(tool: str, payload: dict) -> str:
+    if tool == "find_pharmacy_first":
+        return "a pharmacy offering Pharmacy First"
+    if tool == "find_pharmacy":
+        return "a pharmacy"
+    return {"sexual_health": "a sexual health clinic",
+            "talking_therapies": "an NHS Talking Therapies service",
+            "msk_physio": "an NHS physiotherapy service"}.get(payload.get("service"), "a service")
 
 
 class RouteState(TypedDict, total=False):
     messages: Annotated[list, add_messages]
+    empty_searches: list       # searches that found nothing at their maximum radius
     seen: dict                 # provider id -> record, from successful searches
     eligibility: dict          # pharmacy first condition -> eligibility result
     llm_calls: int
@@ -290,7 +313,9 @@ class RecommendationGuard:
             if not (eligibility.get(cond) or {}).get("eligible"):
                 return None, ("pharmacy_first needs a pharmacy_first_condition whose "
                               "find_pharmacy_first check returned eligible=true.")
-            if not all(seen[i].get("pharmacy_first") for i in ids):
+            # False = known not to offer it. None = NHS register data, not known:
+            # allowed, and the answer tells the patient to check with them.
+            if any(seen[i].get("pharmacy_first") is False for i in ids):
                 return None, "Only pharmacies that offer Pharmacy First can be recommended."
         return {"care_route": route, "providers": [seen[i] for i in ids], "reason": reason,
                 "pharmacy_first_condition": args.get("pharmacy_first_condition")}, None
@@ -359,6 +384,7 @@ class RouteAgent:
         seen = dict(state.get("seen") or {})
         eligibility = dict(state.get("eligibility") or {})
         errors = list(state.get("tool_errors") or [])
+        empty = list(state.get("empty_searches") or [])
         out_msgs: list = []
         if search_calls:
             msg = last.model_copy(update={"tool_calls": search_calls})
@@ -374,6 +400,13 @@ class RouteAgent:
                     for item in payload.get("results") or []:
                         if isinstance(item, dict) and item.get("id"):
                             seen[item["id"]] = item
+                    if (m.name in TOOL_MAX_KM and "error" not in payload
+                            and payload.get("eligible") is not False
+                            and not payload.get("results")
+                            and float(payload.get("radius_km") or 0) >= TOOL_MAX_KM[m.name]):
+                        empty.append({"what": _what(m.name, payload),
+                                      "radius_km": TOOL_MAX_KM[m.name],
+                                      "near": payload.get("searched_near")})
                 out_msgs.append(m)
         result = None
         ctx = _ctx(config)
@@ -383,7 +416,14 @@ class RouteAgent:
                 out_msgs.append(ToolMessage(content='{"ignored": true}', tool_call_id=c["id"],
                                             name=c["name"]))
                 continue
-            if c["name"] == "ask_patient":
+            if c["name"] == "ask_patient" and empty and not self._found_any(seen):
+                # Every search came back empty at its limit: a question can't
+                # change that. Say so instead (code decides, not the model).
+                _progress("Nothing found nearby: not asking a question")
+                result = {"type": "no_services", "searched": empty}
+                out_msgs.append(ToolMessage(content='{"asked": false}', tool_call_id=c["id"],
+                                            name=c["name"]))
+            elif c["name"] == "ask_patient":
                 q = " ".join(str(c["args"].get("question") or "").split())[:300]
                 result = {"type": "ask", "question": q or "Could you tell me a bit more?"}
                 out_msgs.append(ToolMessage(content='{"asked": true}', tool_call_id=c["id"],
@@ -404,7 +444,12 @@ class RouteAgent:
                 out_msgs.append(ToolMessage(content=json.dumps({"error": f"unknown tool {c['name']}"}),
                                             tool_call_id=c["id"], name=c["name"]))
         return {"messages": out_msgs, "seen": seen, "eligibility": eligibility,
-                "tool_errors": errors, "result": result}
+                "tool_errors": errors, "result": result, "empty_searches": empty}
+
+    @staticmethod
+    def _found_any(seen: dict) -> bool:
+        """Did any search (not the registered-GP lookup) return a service?"""
+        return any(not k.startswith("gp:") for k in seen)
 
     async def run(self, conversation: list, config: RunnableConfig) -> dict:
         """conversation: the patient's messages (and earlier answers). Returns
@@ -418,13 +463,18 @@ class RouteAgent:
         final: dict = {}
         async for mode, chunk in self.graph.astream(
                 {"messages": list(conversation), "seen": {}, "eligibility": {}, "llm_calls": 0,
-                 "tool_errors": [], "result": None, "nudged": False}, config,
+                 "tool_errors": [], "result": None, "nudged": False, "empty_searches": []},
+                config,
                 stream_mode=["custom", "values"]):
             if mode == "values":
                 final = chunk
             elif forward is not None:
                 forward(chunk)
         result = final.get("result") or {"type": "no_match", "reason": "no result"}
+        empty = final.get("empty_searches") or []
+        if (result["type"] == "no_match" and empty
+                and not self._found_any(final.get("seen") or {})):
+            result = {"type": "no_services", "searched": empty}
         return {"result": result, "llm_calls": final.get("llm_calls", 0),
                 "tool_errors": final.get("tool_errors", []),
                 "seen_ids": sorted((final.get("seen") or {}).keys())}

@@ -16,3 +16,5 @@ mocktest.py
 
 .pytest_cache/
 docker-compose.override.yml
+# postcodes.io lookups cached by scripts/import_nhs_directory.py
+data/uk/nhs/postcode-cache.json

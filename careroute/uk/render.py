@@ -40,7 +40,35 @@ def option_line(i: int, o: dict) -> str:
         bits.append("walk in, no appointment")
     if o.get("hours"):
         bits.append(o["hours"])
+    if (o.get("source") or "demo") != "demo":
+        bits.append(", ".join(x for x in (o.get("address"), o.get("postcode")) if x))
+        if o.get("phone"):
+            bits.append(f"tel {o['phone']}")
     return f"{i}. {o['name']} — " + "; ".join(b for b in bits if b)
+
+
+def contact_first(options: list[dict], *, pharmacy_first: bool = False) -> str:
+    """Services from the NHS register: real places whose opening hours (and,
+    for pharmacies, Pharmacy First participation) the open data doesn't hold.
+    Say what we know, and say plainly what to check."""
+    unknown_pf = pharmacy_first and any(o.get("pharmacy_first") is None for o in options)
+    check = ("when they're open or whether they offer NHS Pharmacy First"
+             if unknown_pf else "when they're open")
+    return ("These are on the NHS register near you. I can't book them, and the NHS "
+            f"open data doesn't say {check}, so please call them or check nhs.uk "
+            "before you go:\n" + option_list(options))
+
+
+def no_services(searched: list[dict], near: str | None, coverage: str) -> str:
+    """Nothing within the maximum radius: say so plainly. Never a question,
+    never "no match", never a guess."""
+    s = searched[0]
+    where = (s.get("near") or near or "where you are")
+    return (f"I couldn't find {s['what']} within {s['radius_km']:g} km of {where}. "
+            f"{coverage}\n\n"
+            "To find one near you, search NHS services on nhs.uk, or use NHS 111 online "
+            "(111.nhs.uk) if you're not sure where to go. If it gets worse, call 111, "
+            "or 999 in an emergency.")
 
 
 def option_list(options: list[dict]) -> str:

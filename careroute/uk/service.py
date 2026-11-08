@@ -179,7 +179,14 @@ class JourneyService:
         g = await self.graph()
         state = await g.aget_state(self._config(thread_id))
         if not any(t.interrupts for t in state.tasks):
-            raise HTTPException(409, "There is nothing waiting for an answer in this conversation.")
+            raise HTTPException(409, "That question has already been answered or replaced "
+                                     "by a newer message. Please use the latest options.")
+        value = dict(value or {})
+        answered = value.pop("interrupt_id", None)
+        current = (self._pending(state) or {}).get("interrupt_id")
+        if answered is not None and answered != current:
+            raise HTTPException(409, "Those options are out of date: a newer message replaced "
+                                     "them. Please use the latest options.")
         patient_id = state.values.get("patient_id") or meta.get("patient_id")
         update = {"requester_id": requester}
         auth = await self.authority.can_act_for(requester, patient_id) if patient_id else None
@@ -253,9 +260,12 @@ class JourneyService:
 
     @staticmethod
     def _pending(state) -> dict | None:
+        """The paused question, tagged with its interrupt id. The page sends the
+        id back with the answer, so an answer to an OLD card (one a later
+        message replaced) is refused instead of answering a different question."""
         for t in state.tasks:
             for i in t.interrupts:
-                return i.value
+                return {**i.value, "interrupt_id": i.id} if isinstance(i.value, dict) else i.value
         return None
 
     def _result(self, thread_id: str, state, n_before: int) -> dict:

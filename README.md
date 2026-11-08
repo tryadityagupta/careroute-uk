@@ -14,9 +14,27 @@ The design rule throughout: **the LLM handles language, code handles
 decisions.** One agent picks the front door; every check on safety,
 permission, money and booking is done in code.
 
-> **Demo data only.** Every person, practice, clinic, waiting time, price and
-> insurer in `data/uk` is fictional. NHS numbers are in the 999 range NHS
-> England reserves for testing. This is not an NHS service.
+> **Demo data, plus optional real pharmacies.** Every person, GP practice,
+> clinic, booking, waiting time, price and insurer in `data/uk` is fictional.
+> NHS numbers are in the 999 range NHS England reserves for testing. If you
+> import NHS open data (below), real pharmacy names and addresses appear
+> outside Leeds; they are never bookable, and what the registers don't say
+> (opening hours, Pharmacy First participation) is shown as unknown.
+> This is not an NHS service.
+
+## Real pharmacies from NHS open data (optional)
+
+```bash
+python -m scripts.import_nhs_directory --pharmacies path/to/pharmacies.csv --postcodes-io
+```
+
+This writes `data/uk/nhs/directory.json` (about 4 MB for England) from the
+NHSBSA pharmacy list or an ODS export, with coordinates from postcodes.io or
+the ONS Postcode Directory. All are free under the Open Government Licence;
+the page shows the attribution. With the file present the directory runs in
+`mixed` mode: Leeds stays the scripted demo, and anywhere else in England finds
+real pharmacies. See [docs/demo-runbook.md](docs/demo-runbook.md) for where
+to download the files and how to run a stakeholder demo.
 
 ## Run it in two minutes (no API key needed)
 
@@ -134,6 +152,7 @@ careroute/                 shared foundations from the original CareRoute:
                            config, container (DI), checkpointer, Redis, rate
                            limits, OSRM routing, Nominatim, PostGIS, legacy agent
 data/uk/                   fictional demo data (python -m scripts.make_uk_demo_data)
+data/uk/nhs/               optional real pharmacies (python -m scripts.import_nhs_directory)
 web/index.html             the UK demo page; web/legacy.html the original UI
 docs/                      design notes; the original README
 tests/test_uk_*.py         UK tests (units, journeys, HTTP, NHS login, Notify)
@@ -147,6 +166,7 @@ tests/test_uk_*.py         UK tests (units, journeys, HTTP, NHS login, Notify)
 | `POST /chat/resume` | Answer a paused interrupt: `{option_id}`, `{text}` (limits), `{slot_id, consent}` |
 | `GET /chat/{thread_id}` | History and current pause, for reloads and other devices |
 | `POST /referrals/events` | A referral arrives (`{ubrn}`, `X-Event-Key`): starts a Path B thread, idempotently |
+| `GET /directory` | Where provider data comes from: mode, counts, coverage, attribution |
 | `GET /me`, `/inbox`, `/bookings`, `/audit` | Who I can act for, referrals waiting, bookings, actions taken for me |
 | `GET/POST /consents/{token}[/approve\|/decline]` | One-time consent links |
 | `/demo/*` | User list, simulated referrals and GP outcomes, fault switch, SMS outbox |
@@ -169,6 +189,7 @@ UK-specific settings:
 | `CAREROUTE_PUBLIC_BASE_URL` | `http://localhost:8000` | Base of consent links |
 | `GOVUK_NOTIFY_API_KEY`, `GOVUK_NOTIFY_SMS_TEMPLATE_ID` | empty | Real SMS; empty uses the demo outbox |
 | `CAREROUTE_GEOCODE_COUNTRIES` | `gb` | Nominatim country filter |
+| `CAREROUTE_UK_DIRECTORY` | `auto` | `demo`, `nhs` or `mixed`; `auto` is `mixed` when `data/uk/nhs/directory.json` exists, else `demo` |
 
 ## Tests
 
@@ -182,6 +203,7 @@ python -m pytest tests/test_uk_*.py  # just UK CareRoute
 |---|---|
 | `test_uk_units.py` | NHS number check digits, Pharmacy First bands, red-flag rules, unit conversion, insurer maths, SMS privacy, the recommendation guard |
 | `test_uk_journey.py` | Whole journeys: 999 with no model call, escalation never downgraded, proxy and consent, teen confidentiality, invented ids rejected, exactly-once booking, slot taken, honest errors, resume on another replica, GP episode to referral, limits and near misses, private cost |
+| `test_uk_nhs_data.py` | The NHS open data importer (filters, postcodes, attribution), directory modes and grid search, real pharmacies never booked, "nothing nearby" said plainly, answers to replaced cards refused |
 | `test_uk_api.py` | HTTP: identity, thread ownership (404 not 403), SSE, confidential bookings hidden, inbox, consent links, event keys, NHS login token checks (audience, P9, expiry, key), GOV.UK Notify auth and idempotency |
 
 With `REDIS_URL` and `DATABASE_URL` set, the same tests run against Redis and

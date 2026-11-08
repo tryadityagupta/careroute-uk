@@ -200,6 +200,11 @@ def build_router(c, guards: list) -> APIRouter:
             raise HTTPException(409, str(e))
         return {"status": inv["status"]}
 
+    @r.get("/directory")
+    async def directory_info():
+        """Where provider data comes from, for the page's notice and attribution."""
+        return c.uk_directory.info()
+
     # ---- demo helpers ---------------------------------------------------
     if s.demo_tools:
         @r.get("/demo/users")

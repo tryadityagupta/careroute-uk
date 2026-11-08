@@ -110,6 +110,7 @@ class Settings:
     public_base_url: str = "http://localhost:8000"
     postcodes_io_url: str = "https://api.postcodes.io"
     uk_geocode_network: bool = True        # False: offline demo postcodes only
+    uk_directory: str = "auto"             # demo | nhs | mixed | auto (careroute/uk/directory.py)
     notify_api_key: str = ""               # GOV.UK Notify; empty = demo outbox
     notify_sms_template_id: str = ""
 
@@ -221,6 +222,7 @@ class Settings:
                              "http://localhost:8000").rstrip("/"),
             postcodes_io_url=(env("POSTCODES_IO_URL") or "https://api.postcodes.io").rstrip("/"),
             uk_geocode_network=_flag(env("CAREROUTE_UK_GEOCODE_NETWORK"), True),
+            uk_directory=env("CAREROUTE_UK_DIRECTORY", "auto").strip().lower() or "auto",
             notify_api_key=env("GOVUK_NOTIFY_API_KEY", "").strip(),
             notify_sms_template_id=env("GOVUK_NOTIFY_SMS_TEMPLATE_ID", "").strip(),
         )

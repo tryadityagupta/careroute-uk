@@ -303,6 +303,10 @@ class JourneyGraph:
                   "tool_errors": list(state.get("tool_errors") or []) + out["tool_errors"]}
         if res["type"] == "ask":
             return {**update, **say(res["question"]), "outcome": "question"}
+        if res["type"] == "no_services":
+            return {**update, "outcome": "no_services_nearby", **say(render.no_services(
+                res["searched"], state["location"].get("label"),
+                self.d.directory.info()["coverage"]))}
         if res["type"] != "recommend":
             return {**update, "outcome": "no_match", **say(
                 "I couldn't match this to a service with confidence. NHS 111 online "
@@ -325,7 +329,9 @@ class JourneyGraph:
         mode = (p.get("booking_mode") or "appointment") if kind == "direct" else (
             "appointment" if p.get("mode") == "appointments" else "online_consultation")
         if not p.get("bookable") and kind == "direct":
-            mode = "walk_in"
+            # walk_in only when the record SAYS walk-in. NHS register data has
+            # walk_in=None (unknown): the patient contacts the service first.
+            mode = "walk_in" if p.get("walk_in") else "contact"
         return {"option_id": p["id"], "provider_id": p["id"], "kind": kind,
                 "service_type": p.get("service_type"), "name": p["name"],
                 "address": p.get("address"), "postcode": p.get("postcode"),
@@ -333,9 +339,10 @@ class JourneyGraph:
                 "distance_type": p.get("distance_type"), "drive_min": p.get("drive_min"),
                 "hours": p.get("hours"), "walk_in": bool(p.get("walk_in")),
                 "bookable": bool(p.get("bookable")), "booking_mode": mode,
-                "confidential": bool(p.get("confidential")), "pharmacy_first":
-                bool(p.get("pharmacy_first")), "patient_pays_gbp": "0.00", "funding": "NHS",
-                "why": [], "breaks": []}
+                "confidential": bool(p.get("confidential")),
+                "pharmacy_first": p.get("pharmacy_first"),     # None = not known
+                "source": p.get("source") or "demo", "phone": p.get("phone"),
+                "patient_pays_gbp": "0.00", "funding": "NHS", "why": [], "breaks": []}
 
     async def direct_access(self, state: JourneyState):
         options, patient, auth = state["options"], state["patient"], state["authority"]
@@ -348,8 +355,12 @@ class JourneyGraph:
                 f"I can't book it on {patient['first_name']}'s behalf:\n"
                 + render.option_list(options)), "outcome": "confidential"}
         if not any(o["bookable"] for o in options):
-            return {**say(f"{reason}\n\nYou can walk in, no appointment needed:\n"
-                          + render.option_list(options)), "outcome": "walk_in"}
+            if all(o["booking_mode"] == "walk_in" for o in options):
+                return {**say(f"{reason}\n\nYou can walk in, no appointment needed:\n"
+                              + render.option_list(options)), "outcome": "walk_in"}
+            return {**say(f"{reason}\n\n" + render.contact_first(
+                options, pharmacy_first=state.get("care_route") == "pharmacy_first")),
+                "outcome": "contact_directly"}
         return say(f"{reason}\n\nNearest options:\n" + render.option_list(options))
 
     async def registered_gp(self, state: JourneyState, config: RunnableConfig):
@@ -563,6 +574,10 @@ class JourneyGraph:
         if chosen is None:
             return {**say("That option isn't available any more. Nothing has been booked."),
                     "outcome": "declined", "selected_option": None}
+        if chosen["booking_mode"] == "contact":
+            return {**say(render.contact_first(
+                [chosen], pharmacy_first=state.get("care_route") == "pharmacy_first")),
+                "outcome": "contact_directly", "selected_option": None}
         if chosen["booking_mode"] == "walk_in":
             return {**say(f"You can walk in to {chosen['name']}"
                           + (f", {chosen['address']}" if chosen.get("address") else "")

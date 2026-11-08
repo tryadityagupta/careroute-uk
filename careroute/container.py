@@ -66,6 +66,9 @@ class Container:
         uk = (f"[careroute-uk] llm: {s.llm_mode} | NHS login: {s.nhs_login_mode} | "
               f"sms: {'GOV.UK Notify' if s.notify_api_key else 'demo outbox'} | "
               f"demo tools: {'on' if s.demo_tools else 'off'}\n")
+        d = self.uk_directory.info()
+        uk += (f"[careroute-uk] directory: {d['mode']} | demo services: {d['counts']['demo']} | "
+               f"NHS open data services: {d['counts']['nhs']}\n")
         if s.nhs_login_mode == "demo":
             uk += ("[careroute-uk] WARNING: demo login accepts any demo NHS number in a "
                    "header. Never expose this mode with real data.\n")
@@ -260,7 +263,8 @@ class Container:
     @cached_property
     def uk_directory(self):
         from careroute.uk.directory import UkServiceDirectory
-        return UkServiceDirectory.from_dir(self.settings.data_dir, self.uk_distances)
+        return UkServiceDirectory.from_dir(self.settings.data_dir, self.uk_distances,
+                                           mode=self.settings.uk_directory)
 
     @cached_property
     def uk_consents(self):

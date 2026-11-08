@@ -55,6 +55,7 @@ ALIASES = {
              "pharmacy_ods_code_f_code", "pharmacy_code", "f_code", "code"],
     "name": ["trading_name", "pharmacy_trading_name", "organisation_name", "pharmacy_name",
              "name", "contractor_name"],
+    "legal_name": ["contractor_name"],
     "postcode": ["postcode", "post_code", "pcode"],
     "phone": ["telephone", "telephone_number", "contact_telephone_number", "phone"],
     "close_date": ["close_date", "closed_date", "end_date"],
@@ -153,7 +154,8 @@ def records_from(path: Path, *, expect_header: bool | None = None) -> tuple[list
     out = []
     for row in body:
         r = {f: cell(row, cmap.get(f)) for f in ALIASES if f in cmap}
-        r["address_lines"] = [cell(row, i) for i in cmap.get("address", []) if cell(row, i)]
+        r["address_lines"] = [cell(row, i)
+                              for i in cmap.get("address", []) if cell(row, i)]
         out.append(r)
     info = {"file": path.name, "layout": layout, "rows": len(out),
             "nhsbsa_like": layout == "header" and "account_type" in cmap}
@@ -178,7 +180,8 @@ def nice(text: str) -> str:
         elif i and w.lower() in KEEP_LOWER:
             words.append(w.lower())
         else:
-            words.append("-".join(p[:1].upper() + p[1:].lower() for p in w.split("-")))
+            words.append("-".join(p[:1].upper() + p[1:].lower()
+                         for p in w.split("-")))
     return " ".join(words)
 
 
@@ -197,7 +200,7 @@ def pharmacy_skip_reason(r: dict) -> str | None:
         return "not a community pharmacy"
     if acct and "english" not in acct and ("welsh" in acct or "wales" in acct):
         return "outside England"
-    if (r.get("private") or "").lower() in YES:
+    if (r.get("private") or "").lower() in YES | {"private"}:
         return "private contractor"
     if (r.get("out_of_hours") or "").lower() in YES:
         return "out-of-hours contractor"
@@ -230,10 +233,12 @@ class OnspdLookup:
             def col(*options):
                 return next((names.index(o) for o in options if o in names), None)
             pc_i = col("pcds", "postcode", "pcd", "pcd2")
-            lat_i, lng_i = col("lat", "latitude"), col("long", "lng", "longitude")
+            lat_i, lng_i = col("lat", "latitude"), col(
+                "long", "lng", "longitude")
             ctry_i, term_i = col("ctry", "ctry25cd", "country"), col("doterm")
             if None in (pc_i, lat_i, lng_i):
-                raise ImportError_(f"{self.path.name}: needs postcode, lat and long columns.")
+                raise ImportError_(
+                    f"{self.path.name}: needs postcode, lat and long columns.")
             for row in reader:
                 pc = tidy_postcode(row[pc_i]) if pc_i < len(row) else None
                 if pc not in postcodes:
@@ -279,7 +284,8 @@ class PostcodesIoLookup:
             batch = todo[i:i + 100]
             for attempt in range(3):
                 try:
-                    r = self.client.post(f"{self.base_url}/postcodes", json={"postcodes": batch})
+                    r = self.client.post(
+                        f"{self.base_url}/postcodes", json={"postcodes": batch})
                     r.raise_for_status()
                     break
                 except httpx.HTTPError:
@@ -296,7 +302,8 @@ class PostcodesIoLookup:
                         "england": None if not res.get("country") else res["country"] == "England"}
             if (i // 100) % 20 == 19:
                 self._save(cache)
-                print(f"  postcodes: {min(i + 100, len(todo))}/{len(todo)}", file=sys.stderr)
+                print(
+                    f"  postcodes: {min(i + 100, len(todo))}/{len(todo)}", file=sys.stderr)
             time.sleep(self.pause_s)
         self._save(cache)
         return {p: cache[p] for p in postcodes if cache.get(p)}
@@ -320,12 +327,14 @@ def build(pharmacy_files: list[Path], gp_files: list[Path], geo, *,
             sources.append({**info, "kind": kind})
             nhsbsa |= info["nhsbsa_like"]
             for r in recs:
-                reason = (pharmacy_skip_reason if kind == "pharmacy" else gp_skip_reason)(r)
+                reason = (pharmacy_skip_reason if kind ==
+                          "pharmacy" else gp_skip_reason)(r)
                 if reason:
                     skip(reason)
                     continue
                 code = (r.get("code") or "").upper()
                 pc = tidy_postcode(r.get("postcode"))
+                r["name"] = r.get("name") or r.get("legal_name")
                 if not code or not r.get("name"):
                     skip("missing code or name")
                     continue
@@ -360,7 +369,8 @@ def build(pharmacy_files: list[Path], gp_files: list[Path], geo, *,
     statements = [OGL]
     if nhsbsa:
         statements.append(f"Pharmacy data: NHSBSA Copyright {today.year}.")
-    statements.append("Organisation data: NHS England Organisation Data Service (ODS).")
+    statements.append(
+        "Organisation data: NHS England Organisation Data Service (ODS).")
     meta = {"generated": today.isoformat(), "attribution": " ".join(statements),
             "sources": sources,
             "counts": {k: sum(1 for s in kept.values() if s["service_type"] == k)
@@ -378,10 +388,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pharmacies", nargs="+", type=Path, default=[])
     ap.add_argument("--gp-practices", nargs="+", type=Path, default=[])
     g = ap.add_mutually_exclusive_group(required=True)
-    g.add_argument("--postcodes", type=Path, help="ONS Postcode Directory (or similar) CSV")
-    g.add_argument("--postcodes-io", action="store_true", help="look up on postcodes.io")
+    g.add_argument("--postcodes", type=Path,
+                   help="ONS Postcode Directory (or similar) CSV")
+    g.add_argument("--postcodes-io", action="store_true",
+                   help="look up on postcodes.io")
     ap.add_argument("--postcodes-io-url", default="https://api.postcodes.io")
-    ap.add_argument("--all-uk", action="store_true", help="keep services outside England too")
+    ap.add_argument("--all-uk", action="store_true",
+                    help="keep services outside England too")
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     a = ap.parse_args(argv)
     if not a.pharmacies and not a.gp_practices:
@@ -389,12 +402,14 @@ def main(argv: list[str] | None = None) -> int:
     geo = (OnspdLookup(a.postcodes) if a.postcodes else
            PostcodesIoLookup(a.postcodes_io_url, cache=DEFAULT_CACHE))
     try:
-        doc, skipped = build(a.pharmacies, a.gp_practices, geo, england_only=not a.all_uk)
+        doc, skipped = build(a.pharmacies, a.gp_practices,
+                             geo, england_only=not a.all_uk)
     except ImportError_ as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
     a.out.parent.mkdir(parents=True, exist_ok=True)
-    a.out.write_text(json.dumps(doc, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    a.out.write_text(json.dumps(doc, ensure_ascii=False,
+                     separators=(",", ":")), encoding="utf-8")
     c = doc["meta"]["counts"]
     print(f"wrote {a.out} ({a.out.stat().st_size / 1e6:.1f} MB): "
           f"{c['pharmacy']} pharmacies, {c['gp_practice']} GP practices")

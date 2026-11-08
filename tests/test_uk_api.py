@@ -80,6 +80,47 @@ def test_sse_stream_sends_progress_then_a_result():
         assert r.status_code == 400
 
 
+def sse_events(http, path, body, who):
+    with http.stream("POST", path + "?stream=1", json=body, headers=as_user(who)) as r:
+        return [json.loads(line[6:]) for line in r.iter_lines() if line.startswith("data: ")]
+
+
+def test_live_status_arrives_before_the_work_it_describes():
+    with client_for(make_uk_container()) as http:
+        events = sse_events(http, "/chat", {"message": "I've had burning when I pee since yesterday"},
+                            PRIYA)
+    texts = [e.get("text") or e.get("label") for e in events]
+
+    def first(kind, startswith):
+        return next(i for i, e in enumerate(events)
+                    if e["type"] == kind and (e.get("text") or e.get("label")).startswith(startswith))
+
+    # a node's live line comes before the node's finished step
+    assert first("status", "Checking for emergency signs") < first("step", "Checked for emergency")
+    assert first("status", "Working out the right place") < first("step", "Chose the right front")
+    # a tool's live line names what is being searched, and where, before the result
+    search = first("status", "Searching Pharmacy First pharmacies near Headingley")
+    assert search < first("status", "Getting drive times") < first("progress", "Found")
+    assert events[-1]["type"] == "result", texts
+
+
+def test_emergency_status_is_rules_only_and_never_mentions_a_search():
+    with client_for(make_uk_container()) as http:
+        events = sse_events(http, "/chat", {"message": "Crushing chest pain and I'm sweating"},
+                            PRIYA)
+    statuses = [e["text"] for e in events if e["type"] == "status"]
+    assert statuses == ["Checking for emergency signs\u2026"]
+    assert events[-1]["outcome"] == "emergency"
+
+
+def test_json_responses_leave_out_live_status_lines():
+    with client_for(make_uk_container()) as http:
+        r = http.post("/chat", json={"message": "I have a sore throat"},
+                      headers=as_user(PRIYA)).json()
+    kinds = {s["type"] for s in r["steps"]}
+    assert "status" not in kinds and "step" in kinds
+
+
 def test_confidential_bookings_are_hidden_from_parents():
     with client_for(make_uk_container()) as http:
         r = http.post("/chat", json={"message": "I'd like an STI test"},

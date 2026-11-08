@@ -57,6 +57,7 @@ from careroute.uk.authority import AuthorityService, ConsentService
 from careroute.uk.clock import Clock
 from careroute.uk.directory import UkServiceDirectory
 from careroute.uk.geo import DistanceService
+from careroute.uk.status import status
 from careroute.uk.integrations import (BookingFailed, DemoErs, DemoGpSystem, DemoInsurer,
                                        DemoPayments, DemoProviderBooking, SlotTaken, money)
 from careroute.uk.records import NhsRecords
@@ -466,6 +467,7 @@ class JourneyGraph:
         else:
             providers = [p for p in self.d.private_providers
                          if p["specialty"] == ref["specialty"]]
+            status("Checking your insurance cover\u2026")
             quotes = await asyncio.gather(*[
                 self.d.insurer.quote(patient.get("insurance"), patient_id=patient["nhs_number"],
                                      provider=p) for p in providers])
@@ -574,6 +576,7 @@ class JourneyGraph:
         mode = opt["booking_mode"]
         if mode in ("self_referral", "online_consultation"):
             return {"available_slots": []}
+        status(f"Checking available times at {opt['name']}\u2026")
         if opt["kind"] == "gp":
             slots = await self.d.gp.slots(opt["ods"])
         elif opt["kind"] == "ers":
@@ -638,6 +641,9 @@ class JourneyGraph:
             return {**say("I can no longer act for this person (permission expired or was "
                           "withdrawn). Nothing has been booked."), "outcome": "not_authorised"}
         extra = {}
+        status({"online_consultation": f"Sending your request to {opt['name']}\u2026",
+                "self_referral": f"Sending a self-referral to {opt['name']}\u2026"}
+               .get(opt["booking_mode"], f"Booking with {opt['name']}\u2026"))
         try:
             if opt["kind"] == "gp" and opt["booking_mode"] == "online_consultation":
                 summary = " ".join(text_of(m) for m in state["messages"]
@@ -651,11 +657,13 @@ class JourneyGraph:
                                             slot["slot_id"], key)
             elif opt["kind"] == "private":
                 if opt.get("needs_preauth"):
+                    status("Getting pre-authorisation from your insurer\u2026")
                     pa = await self.d.insurer.preauthorise(patient["insurance"],
                                                            opt["provider_id"], key)
                     extra["preauth_ref"] = pa["preauth_ref"]
                 res = await self.d.booking.book(opt["provider_id"], slot["slot_id"], key,
                                                 specialty=state["referral"]["specialty"])
+                status("Taking payment\u2026")
                 pay = await self.d.payments.charge(opt["patient_pays_gbp"], key,
                                                    f"Consultation, {opt['name']}")
                 if pay:

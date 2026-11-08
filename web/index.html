@@ -55,6 +55,18 @@
                     outline: 1px solid var(--line); }
   .msg.bot.booked { border-left: 6px solid var(--green); }
   .msg.error { color: var(--red); }
+  /* The live "what I'm doing now" line: one at a time, replaced in place,
+     removed when the answer arrives. Not part of the conversation. */
+  .status-line { display: flex; align-items: center; gap: 10px; color: var(--ink-2);
+                 font-size: .95rem; padding: 2px 0 2px 18px; }
+  .status-line .dots { display: inline-flex; gap: 4px; }
+  .status-line .dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+  @media (prefers-reduced-motion: no-preference) {
+    .status-line .dots span { animation: pulse 1.2s ease-in-out infinite; }
+    .status-line .dots span:nth-child(2) { animation-delay: .2s; }
+    .status-line .dots span:nth-child(3) { animation-delay: .4s; }
+    @keyframes pulse { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  }
 
   .card { border: 1px solid var(--line); border-top: 4px solid var(--blue); border-radius: 4px;
           padding: 16px; background: #fff; max-width: 66ch; }
@@ -302,9 +314,30 @@ function traceStep(ev) {
   li.scrollIntoView({block: "nearest"});
 }
 
+// ---------- live status line ----------
+function showStatus(text) {
+  let line = $("live-status");
+  if (!line) {
+    line = el("div", "status-line");
+    line.id = "live-status";
+    const dots = el("span", "dots");
+    dots.setAttribute("aria-hidden", "true");
+    dots.append(el("span"), el("span"), el("span"));
+    line.append(dots, el("span", "status-text"));
+  }
+  $("msgs").appendChild(line);              // (re)attach: always the last thing shown
+  line.querySelector(".status-text").textContent = text;
+  line.scrollIntoView({block: "nearest"});
+}
+function clearStatus() {
+  const line = $("live-status");
+  if (line) line.remove();
+}
+
 // ---------- streaming ----------
 async function stream(path, body) {
   state.busy = true; $("send").disabled = true;
+  showStatus("Sending\u2026");
   try {
     const r = await fetch(path + "?stream=1", {method: "POST", headers: headers(), body: JSON.stringify(body)});
     if (!r.ok || !(r.headers.get("content-type") || "").includes("event-stream")) {
@@ -324,13 +357,17 @@ async function stream(path, body) {
         const ev = JSON.parse(line.slice(6));
         if (ev.type === "result") result = ev;
         else if (ev.type === "error") throw new Error(ev.detail);
+        else if (ev.type === "status") showStatus(ev.text);
         else traceStep(ev);
       }
     }
+    clearStatus();
     if (result) handleResult(result);
   } catch (e) {
+    clearStatus();
     addMsg("bot", e.message, "error");
   } finally {
+    clearStatus();
     state.busy = false; $("send").disabled = false;
     refreshSide();
   }

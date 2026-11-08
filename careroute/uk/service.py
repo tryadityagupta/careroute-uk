@@ -6,7 +6,10 @@ uk/service.py — one HTTP call, end to end.
                     referral thread to anyone who may act for its patient.
                     No access looks exactly like "not found".
     3. lock         one run per thread at a time (Redis SET NX, else 409)
-    4. run          astream the graph: progress events go out as they happen
+    4. run          astream the graph; events go out as they happen:
+                      status    live line, BEFORE work ("Searching pharmacies…")
+                      step      a node finished (the trace panel)
+                      progress  a detail of finished work ("Found 3 …")
     5. result       the new answer, the pending interrupt (as buttons), the outcome
     6. checkpoint   one per run (durability="exit"); lock released
 
@@ -48,6 +51,24 @@ STEP_LABELS = {
     "check_slots": "Checked available times",
     "book": "Made the booking",
     "notify": "Sent a confirmation text",
+}
+
+# Present tense, shown live in the chat as each node STARTS (from the graph's
+# "tasks" stream). Interrupt nodes are left out: there the patient is
+# deciding, and the page shows a card instead.
+NODE_STATUS = {
+    "assess": "Checking for emergency signs\u2026",
+    "authorise": "Checking who you can act for\u2026",
+    "intake": "Reading the patient record\u2026",
+    "route_agent": "Working out the right place to go\u2026",
+    "direct_access": "Checking how each service takes patients\u2026",
+    "registered_gp": "Checking the GP practice\u2026",
+    "load_referral": "Loading the referral from e-RS\u2026",
+    "extract_preferences": "Reading your limits\u2026",
+    "shortlist": "Comparing services against your limits\u2026",
+    "check_slots": "Checking available times\u2026",
+    "book": "Making the booking\u2026",
+    "notify": "Sending a confirmation text\u2026",
 }
 
 
@@ -207,10 +228,18 @@ class JourneyService:
         before = await g.aget_state(config)
         n_before = len((before.values or {}).get("messages") or [])
         t0 = time.perf_counter()
-        async for mode, chunk in g.astream(inp, config, stream_mode=["updates", "custom"],
+        async for mode, chunk in g.astream(inp, config,
+                                           stream_mode=["tasks", "updates", "custom"],
                                            durability="exit"):
-            if mode == "custom" and isinstance(chunk, dict) and chunk.get("progress"):
-                yield {"type": "progress", "text": chunk["progress"]}
+            if mode == "tasks":
+                # A task-start event carries "input"; its finish event doesn't.
+                if "input" in chunk and chunk.get("name") in NODE_STATUS:
+                    yield {"type": "status", "text": NODE_STATUS[chunk["name"]]}
+            elif mode == "custom" and isinstance(chunk, dict):
+                if chunk.get("status"):
+                    yield {"type": "status", "text": chunk["status"]}
+                elif chunk.get("progress"):
+                    yield {"type": "progress", "text": chunk["progress"]}
             elif mode == "updates":
                 for node in chunk:
                     if node in STEP_LABELS:
@@ -259,7 +288,7 @@ class JourneyService:
         async for ev in events:
             if ev["type"] == "result":
                 result = ev
-            else:
+            elif ev["type"] != "status":          # live lines only matter while streaming
                 steps.append(ev)
         result.pop("type", None)
         return {**result, "steps": steps}

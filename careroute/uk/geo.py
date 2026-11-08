@@ -18,6 +18,7 @@ from careroute.maps.cache import LRUCache
 from careroute.maps.distance import haversine_km
 from careroute.maps.geocoding import NominatimGeocoder
 from careroute.maps.routing import OsrmRouter
+from careroute.uk.status import status
 
 UK_POSTCODE = re.compile(r"\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})\b", re.I)
 
@@ -98,6 +99,7 @@ class DistanceService:
         if not out:
             return out
         road = None
+        status("Getting drive times\u2026")
         try:
             road = await self.router.road_distances(lat, lng, [(i["lat"], i["lng"]) for i in out])
         except Exception as e:                     # never fail a lookup on OSRM

@@ -42,6 +42,7 @@ from careroute.uk import pharmacy_first
 from careroute.uk.directory import UkServiceDirectory
 from careroute.uk.geo import UkGeocoder
 from careroute.uk.records import NhsRecords
+from careroute.uk.status import place, status
 
 CARE_ROUTES = ("pharmacy_first", "pharmacy", "sexual_health", "talking_therapies",
                "msk_physio", "gp", "self_care")
@@ -103,6 +104,11 @@ def _ctx(config: RunnableConfig | None) -> dict:
     return ((config or {}).get("configurable") or {}).get("journey") or {}
 
 
+SERVICE_WORDS = {"sexual_health": "sexual health clinics",
+                 "talking_therapies": "NHS Talking Therapies services",
+                 "msk_physio": "physiotherapy services"}
+
+
 def _progress(text: str) -> None:
     try:
         get_stream_writer()({"progress": text})
@@ -119,6 +125,7 @@ class RouteToolkit:
 
     async def _where(self, ctx: dict, near_place: str | None) -> tuple[dict | None, str | None]:
         if near_place:
+            status(f"Looking up {place({'label': near_place})}\u2026")
             g = await self.geocoder.geocode(near_place)
             if g is None:
                 return None, f"Could not find '{near_place}'. Ask the patient for a postcode."
@@ -153,6 +160,7 @@ class RouteToolkit:
             if err:
                 return {**elig, "error": err, "error_type": "location"}
             radius = max(1.0, min(float(radius_km), 20.0))
+            status(f"Searching Pharmacy First pharmacies near {place(where)}\u2026")
             res = await directory.search("pharmacy", where["lat"], where["lng"],
                                          radius_km=radius, k=4, pharmacy_first=True)
             _progress(f"Found {len(res)} Pharmacy First pharmacies within {radius:g} km")
@@ -173,6 +181,7 @@ class RouteToolkit:
             if err:
                 return {"error": err, "error_type": "location"}
             radius = max(1.0, min(float(radius_km), 20.0))
+            status(f"Searching pharmacies near {place(where)}\u2026")
             res = await directory.search("pharmacy", where["lat"], where["lng"],
                                          radius_km=radius, k=4)
             _progress(f"Found {len(res)} pharmacies within {radius:g} km")
@@ -195,6 +204,7 @@ class RouteToolkit:
                 return {"error": err, "error_type": "location"}
             radius = max(1.0, min(float(radius_km), 30.0))
             age = (ctx.get("patient") or {}).get("age")
+            status(f"Searching {SERVICE_WORDS[service]} near {place(where)}\u2026")
             res = await directory.search(service, where["lat"], where["lng"], radius_km=radius,
                                          k=3, age=age)
             _progress(f"Found {len(res)} {service.replace('_', ' ')} services within {radius:g} km")
@@ -207,6 +217,7 @@ class RouteToolkit:
             """The patient's registered GP practice and how it takes requests
             (bookable appointments, or an online consultation form)."""
             p = (_ctx(config).get("patient") or {})
+            status("Checking the registered GP practice\u2026")
             practice = records.practice(p.get("practice_ods"))
             if practice is None:
                 return {"error": "No registered GP practice on record.", "results": []}
@@ -320,6 +331,8 @@ class RouteAgent:
         context = _ctx(config).get("context") or ""
         msgs = [SystemMessage(content=ROUTE_PROMPT + ("\n" + context if context else "")),
                 *state["messages"]]
+        if n:                                    # the first call is the node's own status
+            status("Looking at what I found\u2026")
         response = await self.model.ainvoke(msgs)
         update = {"messages": [response], "llm_calls": n + 1}
         if not response.tool_calls:
